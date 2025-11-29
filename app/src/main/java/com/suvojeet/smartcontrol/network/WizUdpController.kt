@@ -10,16 +10,17 @@ import java.net.InetAddress
 object WizUdpController {
     private const val WIZ_PORT = 38899
 
-    // Ye function chupchap background mein magic packet bhejega
-    suspend fun sendCommand(ip: String, state: Boolean, brightness: Int, r: Int, g: Int, b: Int) {
+    suspend fun sendCommand(ip: String, params: Map<String, Any>) {
         withContext(Dispatchers.IO) {
             try {
-                // Brightness range 10-100 safe hoti hai
-                val safeBrightness = brightness.coerceIn(10, 100)
+                // Construct JSON manually to avoid extra dependencies if possible, 
+                // but since we have Gson, let's use a simple string builder for flexibility
+                val paramsJson = params.entries.joinToString(",") { (key, value) ->
+                    val jsonValue = if (value is String) "\"$value\"" else value
+                    "\"$key\":$jsonValue"
+                }
                 
-                val json = """
-                    {"method":"setPilot","params":{"state":$state,"r":$r,"g":$g,"b":$b,"dimming":$safeBrightness}}
-                """.trimIndent()
+                val json = """{"method":"setPilot","params":{$paramsJson}}"""
 
                 val socket = DatagramSocket()
                 val address = InetAddress.getByName(ip)
