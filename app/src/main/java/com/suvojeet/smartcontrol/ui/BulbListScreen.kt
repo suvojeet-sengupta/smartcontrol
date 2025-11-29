@@ -125,10 +125,13 @@ fun BulbCard(
     onToggle: () -> Unit,
     onClick: () -> Unit
 ) {
+    val isAvailable = bulb.isAvailable
+    val cardAlpha = if (isAvailable) 1f else 0.6f
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(enabled = isAvailable, onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF1A1A1A)
         ),
@@ -147,7 +150,7 @@ fun BulbCard(
                     .size(56.dp)
                     .clip(CircleShape)
                     .background(
-                        if (bulb.isOn) bulb.getComposeColor().copy(alpha = 0.2f)
+                        if (isAvailable && bulb.isOn) bulb.getComposeColor().copy(alpha = 0.2f)
                         else Color(0xFF2A2A2A)
                     ),
                 contentAlignment = Alignment.Center
@@ -155,7 +158,7 @@ fun BulbCard(
                 Icon(
                     imageVector = Icons.Default.Lightbulb,
                     contentDescription = null,
-                    tint = if (bulb.isOn) bulb.getComposeColor() else Color.Gray,
+                    tint = if (isAvailable && bulb.isOn) bulb.getComposeColor() else Color.Gray,
                     modifier = Modifier.size(32.dp)
                 )
             }
@@ -166,22 +169,32 @@ fun BulbCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = bulb.name,
-                    color = Color.White,
+                    color = if (isAvailable) Color.White else Color.Gray,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = bulb.ipAddress,
-                    color = Color.Gray,
-                    fontSize = 13.sp
-                )
-                if (bulb.isOn) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                
+                if (isAvailable) {
                     Text(
-                        text = "Brightness: ${bulb.brightness.toInt()}%",
+                        text = bulb.ipAddress,
                         color = Color.Gray,
-                        fontSize = 12.sp
+                        fontSize = 13.sp
+                    )
+                    if (bulb.isOn) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Brightness: ${bulb.brightness.toInt()}%",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Device Unavailable",
+                        color = Color.Red.copy(alpha = 0.7f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -192,16 +205,16 @@ fun BulbCard(
                     .size(56.dp)
                     .clip(CircleShape)
                     .background(
-                        if (bulb.isOn) Color.White
+                        if (isAvailable && bulb.isOn) Color.White
                         else Color(0xFF2A2A2A)
                     )
-                    .clickable(onClick = onToggle),
+                    .clickable(enabled = isAvailable, onClick = onToggle),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.PowerSettingsNew,
                     contentDescription = "Power",
-                    tint = if (bulb.isOn) Color.Black else Color.Gray,
+                    tint = if (isAvailable && bulb.isOn) Color.Black else Color.Gray,
                     modifier = Modifier.size(28.dp)
                 )
             }

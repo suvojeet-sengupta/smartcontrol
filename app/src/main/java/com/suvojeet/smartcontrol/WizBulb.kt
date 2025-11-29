@@ -10,7 +10,8 @@ data class WizBulb(
     val brightness: Float = 50f,
     val colorInt: Int = Color.White.hashCode(),
     val temperature: Int = 4000, // Kelvin: 2700 (warm) to 6500 (cool)
-    val sceneMode: String? = null // null = manual, or scene name like "fireplace", "sunset", etc.
+    val sceneMode: String? = null, // null = manual, or scene name like "fireplace", "sunset", etc.
+    val isAvailable: Boolean = true
 ) {
     fun getComposeColor(): Color {
         return Color(colorInt)
