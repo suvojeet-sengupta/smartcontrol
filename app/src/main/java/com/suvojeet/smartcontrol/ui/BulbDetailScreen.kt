@@ -1,6 +1,7 @@
 package com.suvojeet.smartcontrol.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -117,7 +119,7 @@ fun BulbDetailScreen(
             // Tab Content
             when (selectedTab) {
                 0 -> ColorTab(bulb, onColorChange, onBrightnessChange, onSceneSelect)
-                1 -> DynamicTab(onSceneSelect)
+                1 -> DynamicTab(bulb.sceneMode, onSceneSelect)
                 2 -> WhiteTab(bulb, onTemperatureChange, onBrightnessChange, onSceneSelect)
             }
         }
@@ -160,6 +162,7 @@ fun ColorTab(
             )
             
             presetColors.forEach { (color, name) ->
+                val isSelected = bulb.colorInt == color.toArgb() && bulb.sceneMode == null
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.clickable { onColorChange(color) }
@@ -169,12 +172,17 @@ fun ColorTab(
                             .size(48.dp)
                             .clip(CircleShape)
                             .background(color)
+                            .then(
+                                if (isSelected) Modifier.border(2.dp, Color.White, CircleShape)
+                                else Modifier
+                            )
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         name,
                         fontSize = 10.sp,
-                        color = Color.Gray
+                        color = if (isSelected) Color.White else Color.Gray,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                     )
                 }
             }
@@ -214,7 +222,10 @@ fun ColorTab(
 }
 
 @Composable
-fun DynamicTab(onSceneSelect: (String) -> Unit) {
+fun DynamicTab(
+    currentScene: String?,
+    onSceneSelect: (String) -> Unit
+) {
     val dynamicScenes = listOf(
         "fireplace" to "🔥 Fireplace",
         "fall" to "🍂 Fall",
@@ -241,6 +252,7 @@ fun DynamicTab(onSceneSelect: (String) -> Unit) {
         items(dynamicScenes) { (sceneId, sceneName) ->
             SceneCard(
                 name = sceneName,
+                isSelected = currentScene == sceneId,
                 onClick = { onSceneSelect(sceneId) }
             )
         }
@@ -283,6 +295,7 @@ fun WhiteTab(
                 TemperaturePresetButton(
                     name = name,
                     temperature = temp,
+                    isSelected = bulb.temperature == temp && bulb.sceneMode == null && bulb.colorInt == Color.White.hashCode(),
                     onClick = { 
                         onTemperatureChange(temp)
                         onSceneSelect(null)
@@ -326,6 +339,7 @@ fun WhiteTab(
             items(functionalScenes) { (sceneId, sceneName) ->
                 SceneCard(
                     name = sceneName,
+                    isSelected = bulb.sceneMode == sceneId,
                     onClick = { onSceneSelect(sceneId) }
                 )
             }
@@ -369,15 +383,20 @@ fun WhiteTab(
 @Composable
 fun SceneCard(
     name: String,
+    isSelected: Boolean = false,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .then(
+                if (isSelected) Modifier.border(2.dp, Color(0xFF00BCD4), RoundedCornerShape(16.dp))
+                else Modifier
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1A1A1A)
+            containerColor = if (isSelected) Color(0xFF2A2A2A) else Color(0xFF1A1A1A)
         ),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -387,9 +406,9 @@ fun SceneCard(
         ) {
             Text(
                 name,
-                color = Color.White,
+                color = if (isSelected) Color(0xFF00BCD4) else Color.White,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(8.dp)
             )
@@ -401,6 +420,7 @@ fun SceneCard(
 fun TemperaturePresetButton(
     name: String,
     temperature: Int,
+    isSelected: Boolean = false,
     onClick: () -> Unit
 ) {
     val color = when {
@@ -418,7 +438,11 @@ fun TemperaturePresetButton(
             modifier = Modifier
                 .size(56.dp)
                 .clip(CircleShape)
-                .background(color.copy(alpha = 0.3f))
+                .background(color.copy(alpha = if (isSelected) 0.6f else 0.3f))
+                .then(
+                    if (isSelected) Modifier.border(2.dp, Color.White, CircleShape)
+                    else Modifier
+                )
                 .padding(4.dp)
                 .clip(CircleShape)
                 .background(color)
@@ -427,8 +451,8 @@ fun TemperaturePresetButton(
         Text(
             name,
             fontSize = 11.sp,
-            color = Color.Gray,
-            fontWeight = FontWeight.Medium
+            color = if (isSelected) Color.White else Color.Gray,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
         )
     }
 }
