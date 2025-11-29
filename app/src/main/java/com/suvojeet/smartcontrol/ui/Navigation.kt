@@ -28,7 +28,7 @@ fun SmartControlNavigation(viewModel: HomeViewModel = viewModel()) {
             BulbListScreen(
                 bulbs = viewModel.bulbs,
                 onAddBulb = { name, ip -> viewModel.addBulb(name, ip) },
-                onDeleteBulb = { id -> viewModel.deleteBulb(id) },
+                onDeleteBulbs = { ids -> viewModel.deleteBulbs(ids) },
                 onToggleBulb = { id -> viewModel.toggleBulb(id) },
                 onNavigateToDetail = { bulbId ->
                     navController.navigate(Screen.BulbDetail.createRoute(bulbId))

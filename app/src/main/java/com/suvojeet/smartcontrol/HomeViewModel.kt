@@ -107,6 +107,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         repository.saveDevices(updatedList)
     }
 
+    fun deleteBulbs(ids: List<String>) {
+        val updatedList = bulbs.filter { it.id !in ids }
+        bulbs = updatedList
+        repository.saveDevices(updatedList)
+    }
+
     fun toggleBulb(id: String) {
         bulbs = bulbs.map { if (it.id == id) it.copy(isOn = !it.isOn) else it }
         syncWithBulb(id)
