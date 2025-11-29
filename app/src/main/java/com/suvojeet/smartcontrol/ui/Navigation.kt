@@ -11,6 +11,7 @@ import com.suvojeet.smartcontrol.HomeViewModel
 
 sealed class Screen(val route: String) {
     object BulbList : Screen("bulb_list")
+    object Setup : Screen("setup")
     object BulbDetail : Screen("bulb_detail/{bulbId}") {
         fun createRoute(bulbId: String) = "bulb_detail/$bulbId"
     }
@@ -27,13 +28,20 @@ fun SmartControlNavigation(viewModel: HomeViewModel = viewModel()) {
         composable(Screen.BulbList.route) {
             BulbListScreen(
                 bulbs = viewModel.bulbs,
-                onAddBulb = viewModel::addBulb,
+                onNavigateToSetup = { navController.navigate(Screen.Setup.route) },
                 onDeleteBulbs = viewModel::deleteBulbs,
                 onToggleBulb = viewModel::toggleBulb,
                 onBrightnessChange = viewModel::updateBrightness,
                 onNavigateToDetail = { bulbId ->
                     navController.navigate(Screen.BulbDetail.createRoute(bulbId))
                 }
+            )
+        }
+
+        composable(Screen.Setup.route) {
+            SetupScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onAddBulb = viewModel::addBulb
             )
         }
 

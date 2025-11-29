@@ -35,13 +35,12 @@ import com.suvojeet.smartcontrol.WizBulb
 @Composable
 fun BulbListScreen(
     bulbs: List<WizBulb>,
-    onAddBulb: (String, String) -> Unit,
+    onNavigateToSetup: () -> Unit,
     onDeleteBulbs: (List<String>) -> Unit,
     onToggleBulb: (String) -> Unit,
     onBrightnessChange: (String, Float) -> Unit,
     onNavigateToDetail: (String) -> Unit
 ) {
-    var showAddDialog by remember { mutableStateOf(false) }
     var selectedBulbIds by remember { mutableStateOf(setOf<String>()) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     val isSelectionMode = selectedBulbIds.isNotEmpty()
@@ -89,7 +88,7 @@ fun BulbListScreen(
         floatingActionButton = {
             if (!isSelectionMode) {
                 FloatingActionButton(
-                    onClick = { showAddDialog = true },
+                    onClick = onNavigateToSetup,
                     containerColor = Color(0xFF4CAF50),
                     contentColor = Color.White
                 ) {
@@ -164,15 +163,7 @@ fun BulbListScreen(
             }
         }
 
-        if (showAddDialog) {
-            AddBulbDialog(
-                onDismiss = { showAddDialog = false },
-                onConfirm = { name, ip ->
-                    onAddBulb(name, ip)
-                    showAddDialog = false
-                }
-            )
-        }
+
 
         if (showDeleteConfirmation) {
             AlertDialog(
@@ -388,84 +379,4 @@ fun BulbCard(
     }
 }
 
-@Composable
-fun AddBulbDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    var ip by remember { mutableStateOf("") }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1A1A1A),
-        title = { 
-            Text(
-                "Add New Bulb",
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            ) 
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Bulb Name") },
-                    placeholder = { Text("Living Room") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF4CAF50),
-                        unfocusedBorderColor = Color.Gray,
-                        focusedLabelColor = Color(0xFF4CAF50),
-                        unfocusedLabelColor = Color.Gray
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                OutlinedTextField(
-                    value = ip,
-                    onValueChange = { ip = it },
-                    label = { Text("IP Address") },
-                    placeholder = { Text("192.168.1.5") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF4CAF50),
-                        unfocusedBorderColor = Color.Gray,
-                        focusedLabelColor = Color(0xFF4CAF50),
-                        unfocusedLabelColor = Color.Gray
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { 
-                    if (name.isNotEmpty() && ip.isNotEmpty()) {
-                        onConfirm(name, ip)
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4CAF50),
-                    contentColor = Color.White
-                ),
-                enabled = name.isNotEmpty() && ip.isNotEmpty()
-            ) {
-                Text("Add")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = Color.Gray
-                )
-            ) {
-                Text("Cancel")
-            }
-        }
-    )
-}
