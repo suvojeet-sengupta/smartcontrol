@@ -29,7 +29,8 @@ android {
             val keyPassword = System.getenv("KEY_PASSWORD")
 
             if (keystorePath != null && keystorePassword != null && keyAlias != null && keyPassword != null) {
-                storeFile = file(keystorePath)
+                // Use rootProject.file() to resolve path from project root, not app module
+                storeFile = rootProject.file(keystorePath)
                 storePassword = keystorePassword
                 this.keyAlias = keyAlias
                 this.keyPassword = keyPassword
