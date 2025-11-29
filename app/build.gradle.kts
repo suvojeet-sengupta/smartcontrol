@@ -53,8 +53,8 @@ dependencies {
     
     // WiZ SmartControl dependencies
     implementation("com.google.code.gson:gson:2.10.1")
-    implementation("androidx.compose.material:material-icons-extended:1.5.4")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
+    implementation("androidx.compose.material:material-icons-extended:1.7.6")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
