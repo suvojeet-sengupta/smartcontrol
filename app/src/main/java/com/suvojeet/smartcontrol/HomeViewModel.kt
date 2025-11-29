@@ -118,6 +118,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         syncWithBulb(id)
         repository.saveDevices(bulbs)
     }
+
+    fun updateBrightness(id: String, value: Float) {
+        bulbs = bulbs.map { if (it.id == id) it.copy(brightness = value) else it }
+        syncWithBulb(id)
+    }
+
+    fun updateColor(id: String, color: Color) {
+        bulbs = bulbs.map { 
+            if (it.id == id) {
+                it.copy(
+                    colorInt = color.toArgb(),
+                    sceneMode = null // Reset scene mode so color takes effect
+                ) 
+            } else it 
+        }
+        syncWithBulb(id)
+        repository.saveDevices(bulbs)
+    }
+
+    private val sceneMap = mapOf(
+        "ocean" to 1, "romance" to 2, "sunset" to 3, "party" to 4,
+        "fireplace" to 5, "cozy" to 6, "forest" to 7, "pastel" to 8,
+        "wakeup" to 9, "bedtime" to 10, "warmwhite" to 11, "daylight" to 12,
         "coolwhite" to 13, "nightlight" to 14, "focus" to 15, "relax" to 16,
         "truecolors" to 17, "tvtime" to 18, "plantgrowth" to 19, "spring" to 20,
         "summer" to 21, "fall" to 22, "deepdive" to 23, "jungle" to 24,
