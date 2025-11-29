@@ -23,6 +23,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     var bulbs by mutableStateOf<List<WizBulb>>(emptyList())
         private set
 
+    private val lastUpdateMap = mutableMapOf<String, Long>()
+
     init {
         // App khulte hi purane saved bulbs load karo
         loadBulbs()
@@ -44,6 +46,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun refreshBulbStatuses() {
         val updatedBulbs = bulbs.map { bulb ->
+            // Check cooldown
+            val lastUpdate = lastUpdateMap[bulb.id] ?: 0L
+            if (System.currentTimeMillis() - lastUpdate < 3000) {
+                return@map bulb // Skip update if within cooldown
+            }
+
             val status = WizUdpController.getBulbStatus(bulb.ipAddress)
             if (status != null) {
                 val result = status["result"] as? Map<String, Any> ?: status
@@ -114,17 +122,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleBulb(id: String) {
+        lastUpdateMap[id] = System.currentTimeMillis()
         bulbs = bulbs.map { if (it.id == id) it.copy(isOn = !it.isOn) else it }
         syncWithBulb(id)
         repository.saveDevices(bulbs)
     }
 
     fun updateBrightness(id: String, value: Float) {
+        lastUpdateMap[id] = System.currentTimeMillis()
         bulbs = bulbs.map { if (it.id == id) it.copy(brightness = value) else it }
         syncWithBulb(id)
     }
 
     fun updateColor(id: String, color: Color) {
+        lastUpdateMap[id] = System.currentTimeMillis()
         bulbs = bulbs.map { 
             if (it.id == id) {
                 it.copy(
@@ -149,6 +160,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     fun updateTemperature(id: String, temp: Int) {
+        lastUpdateMap[id] = System.currentTimeMillis()
         bulbs = bulbs.map { 
             if (it.id == id) {
                 it.copy(
@@ -163,6 +175,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateScene(id: String, scene: String?) {
+        lastUpdateMap[id] = System.currentTimeMillis()
         bulbs = bulbs.map { if (it.id == id) it.copy(sceneMode = scene) else it }
         syncWithBulb(id)
         repository.saveDevices(bulbs)

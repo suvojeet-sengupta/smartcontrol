@@ -218,9 +218,13 @@ fun BulbCard(
     // Gesture handling for brightness
     var accumulatedDrag by remember { mutableStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
+    var dragBrightness by remember { mutableStateOf<Float?>(null) }
     
     val cyanColor = Color(0xFF03A9F4)
     val cardBackgroundColor = Color(0xFF111729) // Darker blue-grey background
+    
+    // Determine brightness to display: local drag value or actual bulb value
+    val displayBrightness = dragBrightness ?: bulb.brightness
     
     Card(
         modifier = Modifier
@@ -234,14 +238,22 @@ fun BulbCard(
             .pointerInput(Unit) {
                 if (isAvailable && !isSelectionMode && bulb.isOn) {
                     detectHorizontalDragGestures(
-                        onDragStart = { isDragging = true },
+                        onDragStart = { 
+                            isDragging = true 
+                            dragBrightness = bulb.brightness
+                        },
                         onDragEnd = { 
                             isDragging = false 
-                            accumulatedDrag = 0f 
+                            accumulatedDrag = 0f
+                            dragBrightness?.let { finalBrightness ->
+                                onBrightnessChange(finalBrightness)
+                            }
+                            dragBrightness = null
                         },
                         onDragCancel = { 
                             isDragging = false 
                             accumulatedDrag = 0f 
+                            dragBrightness = null
                         }
                     ) { change, dragAmount ->
                         change.consume()
@@ -250,9 +262,11 @@ fun BulbCard(
                         // Sensitivity: 2px drag = 1% brightness change
                         if (kotlin.math.abs(accumulatedDrag) > 2) {
                             val changeAmount = (accumulatedDrag / 2).toInt()
-                            val newBrightness = (bulb.brightness + changeAmount).coerceIn(10f, 100f)
-                            if (newBrightness != bulb.brightness) {
-                                onBrightnessChange(newBrightness)
+                            val currentBase = dragBrightness ?: bulb.brightness
+                            val newBrightness = (currentBase + changeAmount).coerceIn(10f, 100f)
+                            
+                            if (newBrightness != currentBase) {
+                                dragBrightness = newBrightness
                                 accumulatedDrag = 0f 
                             }
                         }
@@ -273,7 +287,7 @@ fun BulbCard(
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .fillMaxWidth(fraction = bulb.brightness / 100f)
+                        .fillMaxWidth(fraction = displayBrightness / 100f)
                         .background(cyanColor)
                 )
                 
@@ -291,7 +305,7 @@ fun BulbCard(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "${bulb.brightness.toInt()}%",
+                        text = "${displayBrightness.toInt()}%",
                         color = Color.White,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold
@@ -305,7 +319,7 @@ fun BulbCard(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .fillMaxWidth(fraction = bulb.brightness / 100f)
+                            .fillMaxWidth(fraction = displayBrightness / 100f)
                             .height(6.dp)
                             .background(cyanColor)
                     )
