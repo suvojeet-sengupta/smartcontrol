@@ -40,8 +40,16 @@ fun SmartControlNavigation(viewModel: HomeViewModel = viewModel()) {
 
         composable(Screen.Setup.route) {
             SetupScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onAddBulb = viewModel::addBulb
+                onNavigateBack = { 
+                    viewModel.resetDiscovery()
+                    navController.popBackStack() 
+                },
+                onAddBulb = viewModel::addBulb,
+                discoveryState = viewModel.discoveryState,
+                discoveredBulbs = viewModel.discoveredBulbs,
+                onStartDiscovery = viewModel::startDiscovery,
+                onAddDiscoveredBulb = viewModel::addDiscoveredBulb,
+                onAddAllDiscovered = viewModel::addAllDiscoveredBulbs
             )
         }
 

@@ -10,6 +10,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.suvojeet.smartcontrol.data.DeviceRepository
 import com.suvojeet.smartcontrol.network.WizUdpController
+import com.suvojeet.smartcontrol.network.BulbDiscovery
+import com.suvojeet.smartcontrol.network.DiscoveredBulb
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -19,8 +21,16 @@ import java.util.UUID
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = DeviceRepository(application)
+    private val context = application.applicationContext
     
     var bulbs by mutableStateOf<List<WizBulb>>(emptyList())
+        private set
+
+    // Discovery state
+    var discoveryState by mutableStateOf<DiscoveryState>(DiscoveryState.Idle)
+        private set
+    
+    var discoveredBulbs by mutableStateOf<List<DiscoveredBulb>>(emptyList())
         private set
 
     private val lastUpdateMap = mutableMapOf<String, Long>()
@@ -214,4 +224,74 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             WizUdpController.sendCommand(bulb.ipAddress, params)
         }
     }
+
+    // Discovery functions
+    fun startDiscovery() {
+        viewModelScope.launch {
+            try {
+                discoveryState = DiscoveryState.Scanning
+                discoveredBulbs = emptyList()
+                
+                val found = BulbDiscovery.discoverBulbs(context)
+                
+                // Filter out already added bulbs
+                val existingIps = bulbs.map { it.ipAddress }.toSet()
+                val newBulbs = found.filter { it.ipAddress !in existingIps }
+                
+                discoveredBulbs = newBulbs
+                discoveryState = if (newBulbs.isNotEmpty()) {
+                    DiscoveryState.Success
+                } else {
+                    DiscoveryState.NoDevicesFound
+                }
+            } catch (e: Exception) {
+                discoveryState = DiscoveryState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
+    fun addDiscoveredBulb(discoveredBulb: DiscoveredBulb) {
+        val newBulb = WizBulb(
+            id = UUID.randomUUID().toString(),
+            name = discoveredBulb.name,
+            ipAddress = discoveredBulb.ipAddress
+        )
+        val updatedList = bulbs + newBulb
+        bulbs = updatedList
+        repository.saveDevices(updatedList)
+        
+        // Remove from discovered list
+        discoveredBulbs = discoveredBulbs.filter { it.ipAddress != discoveredBulb.ipAddress }
+    }
+
+    fun addAllDiscoveredBulbs() {
+        val newBulbs = discoveredBulbs.map { discovered ->
+            WizBulb(
+                id = UUID.randomUUID().toString(),
+                name = discovered.name,
+                ipAddress = discovered.ipAddress
+            )
+        }
+        val updatedList = bulbs + newBulbs
+        bulbs = updatedList
+        repository.saveDevices(updatedList)
+        
+        // Clear discovered list
+        discoveredBulbs = emptyList()
+        discoveryState = DiscoveryState.Idle
+    }
+
+    fun resetDiscovery() {
+        discoveryState = DiscoveryState.Idle
+        discoveredBulbs = emptyList()
+    }
+}
+
+// Discovery state sealed class
+sealed class DiscoveryState {
+    object Idle : DiscoveryState()
+    object Scanning : DiscoveryState()
+    object Success : DiscoveryState()
+    object NoDevicesFound : DiscoveryState()
+    data class Error(val message: String) : DiscoveryState()
 }

@@ -2,12 +2,18 @@ package com.suvojeet.smartcontrol.ui
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,12 +24,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.suvojeet.smartcontrol.DiscoveryState
+import com.suvojeet.smartcontrol.network.DiscoveredBulb
 
 @OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SetupScreen(
     onNavigateBack: () -> Unit,
-    onAddBulb: (String, String) -> Unit
+    onAddBulb: (String, String) -> Unit,
+    discoveryState: DiscoveryState,
+    discoveredBulbs: List<DiscoveredBulb>,
+    onStartDiscovery: () -> Unit,
+    onAddDiscoveredBulb: (DiscoveredBulb) -> Unit,
+    onAddAllDiscovered: () -> Unit
 ) {
     var currentStep by remember { mutableStateOf(0) }
     var bulbName by remember { mutableStateOf("") }
@@ -59,7 +72,17 @@ fun SetupScreen(
             ) { step ->
                 when (step) {
                     0 -> WelcomeStep(onNext = { currentStep = 1 })
-                    1 -> InstallStep(onNext = { currentStep = 2 })
+                    1 -> DiscoveryStep(
+                        discoveryState = discoveryState,
+                        discoveredBulbs = discoveredBulbs,
+                        onStartDiscovery = onStartDiscovery,
+                        onAddBulb = onAddDiscoveredBulb,
+                        onAddAll = {
+                            onAddAllDiscovered()
+                            currentStep = 3
+                        },
+                        onSkip = { currentStep = 2 }
+                    )
                     2 -> ConnectStep(
                         name = bulbName,
                         ip = bulbIp,
@@ -113,6 +136,233 @@ fun WelcomeStep(onNext: () -> Unit) {
             modifier = Modifier.fillMaxWidth().height(50.dp)
         ) {
             Text("Start Setup", fontSize = 18.sp)
+        }
+    }
+}
+
+@Composable
+fun DiscoveryStep(
+    discoveryState: DiscoveryState,
+    discoveredBulbs: List<DiscoveredBulb>,
+    onStartDiscovery: () -> Unit,
+    onAddBulb: (DiscoveredBulb) -> Unit,
+    onAddAll: () -> Unit,
+    onSkip: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+        // Header
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            tint = Color(0xFF00BCD4),
+            modifier = Modifier.size(80.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            "Find Devices",
+            color = Color.White,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "Automatically discover WiZ bulbs on your network",
+            color = Color.Gray,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // Main content based on state
+        when (discoveryState) {
+            is DiscoveryState.Idle -> {
+                Button(
+                    onClick = onStartDiscovery,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4)),
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Scan Network", fontSize = 18.sp)
+                }
+            }
+            
+            is DiscoveryState.Scanning -> {
+                CircularProgressIndicator(
+                    color = Color(0xFF00BCD4),
+                    modifier = Modifier.size(64.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Scanning network...",
+                    color = Color.White,
+                    fontSize = 16.sp
+                )
+            }
+            
+            is DiscoveryState.Success -> {
+                // Show discovered bulbs
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(discoveredBulbs) { bulb ->
+                        DiscoveredBulbCard(
+                            bulb = bulb,
+                            onAdd = { onAddBulb(bulb) }
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                if (discoveredBulbs.isNotEmpty()) {
+                    Button(
+                        onClick = onAddAll,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                        modifier = Modifier.fillMaxWidth().height(50.dp)
+                    ) {
+                        Text("Add All (${discoveredBulbs.size})", fontSize = 18.sp)
+                    }
+                } else {
+                    Text(
+                        "All discovered devices have been added!",
+                        color = Color.Gray,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            
+            is DiscoveryState.NoDevicesFound -> {
+                Icon(
+                    imageVector = Icons.Default.Lightbulb,
+                    contentDescription = null,
+                    tint = Color.Gray,
+                    modifier = Modifier.size(64.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "No devices found",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Make sure your bulbs are powered on and connected to the same WiFi network.",
+                    color = Color.Gray,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = onStartDiscovery,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4)),
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                ) {
+                    Text("Try Again", fontSize = 18.sp)
+                }
+            }
+            
+            is DiscoveryState.Error -> {
+                Text(
+                    "Error: ${discoveryState.message}",
+                    color = Color.Red,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onStartDiscovery,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4)),
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                ) {
+                    Text("Try Again", fontSize = 18.sp)
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Skip button
+        TextButton(onClick = onSkip) {
+            Text("Enter Manually", color = Color.Gray)
+        }
+    }
+}
+
+@Composable
+fun DiscoveredBulbCard(
+    bulb: DiscoveredBulb,
+    onAdd: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF00BCD4).copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lightbulb,
+                        contentDescription = null,
+                        tint = Color(0xFF00BCD4),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                Column {
+                    Text(
+                        bulb.name,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        bulb.ipAddress,
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+            
+            IconButton(
+                onClick = onAdd,
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = Color(0xFF4CAF50)
+                )
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = "Add",
+                    tint = Color.White
+                )
+            }
         }
     }
 }
