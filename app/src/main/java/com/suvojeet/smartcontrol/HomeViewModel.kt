@@ -11,6 +11,8 @@ import androidx.lifecycle.viewModelScope
 import com.suvojeet.smartcontrol.data.DeviceRepository
 import com.suvojeet.smartcontrol.network.WizUdpController
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import java.util.UUID
 
 // AndroidViewModel use kiya taaki Storage ke liye Context mil jaye
@@ -24,60 +26,67 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     init {
         // App khulte hi purane saved bulbs load karo
         loadBulbs()
-        refreshBulbStatuses()
+        startPolling()
     }
 
     private fun loadBulbs() {
         bulbs = repository.getDevices()
     }
 
-    private fun refreshBulbStatuses() {
+    private fun startPolling() {
         viewModelScope.launch {
-            val updatedBulbs = bulbs.map { bulb ->
-                val status = WizUdpController.getBulbStatus(bulb.ipAddress)
-                if (status != null) {
-                    val result = status["result"] as? Map<String, Any> ?: status
-                    
-                    val isOn = result["state"] as? Boolean ?: bulb.isOn
-                    val dimming = (result["dimming"] as? Number)?.toFloat() ?: bulb.brightness
-                    val sceneId = (result["sceneId"] as? Number)?.toInt() ?: 0
-                    val temp = (result["temp"] as? Number)?.toInt() ?: 0
-                    val r = (result["r"] as? Number)?.toInt() ?: 0
-                    val g = (result["g"] as? Number)?.toInt() ?: 0
-                    val b = (result["b"] as? Number)?.toInt() ?: 0
-
-                    var newSceneMode: String? = null
-                    var newColorInt = bulb.colorInt
-                    var newTemp = bulb.temperature
-
-                    if (sceneId > 0) {
-                        // Find scene name from ID
-                        newSceneMode = sceneMap.entries.find { it.value == sceneId }?.key
-                    } else if (temp > 0) {
-                        newTemp = temp
-                        newSceneMode = null
-                        newColorInt = Color.White.toArgb()
-                    } else {
-                        // Color mode
-                        newSceneMode = null
-                        if (r > 0 || g > 0 || b > 0) {
-                             newColorInt = Color(r / 255f, g / 255f, b / 255f).toArgb()
-                        }
-                    }
-
-                    bulb.copy(
-                        isOn = isOn,
-                        brightness = dimming,
-                        sceneMode = newSceneMode,
-                        temperature = newTemp,
-                        colorInt = newColorInt
-                    )
-                } else {
-                    bulb
-                }
+            while (isActive) {
+                refreshBulbStatuses()
+                delay(3000) // Poll every 3 seconds
             }
-            bulbs = updatedBulbs
         }
+    }
+
+    private suspend fun refreshBulbStatuses() {
+        val updatedBulbs = bulbs.map { bulb ->
+            val status = WizUdpController.getBulbStatus(bulb.ipAddress)
+            if (status != null) {
+                val result = status["result"] as? Map<String, Any> ?: status
+                
+                val isOn = result["state"] as? Boolean ?: bulb.isOn
+                val dimming = (result["dimming"] as? Number)?.toFloat() ?: bulb.brightness
+                val sceneId = (result["sceneId"] as? Number)?.toInt() ?: 0
+                val temp = (result["temp"] as? Number)?.toInt() ?: 0
+                val r = (result["r"] as? Number)?.toInt() ?: 0
+                val g = (result["g"] as? Number)?.toInt() ?: 0
+                val b = (result["b"] as? Number)?.toInt() ?: 0
+
+                var newSceneMode: String? = null
+                var newColorInt = bulb.colorInt
+                var newTemp = bulb.temperature
+
+                if (sceneId > 0) {
+                    // Find scene name from ID
+                    newSceneMode = sceneMap.entries.find { it.value == sceneId }?.key
+                } else if (temp > 0) {
+                    newTemp = temp
+                    newSceneMode = null
+                    newColorInt = Color.White.toArgb()
+                } else {
+                    // Color mode
+                    newSceneMode = null
+                    if (r > 0 || g > 0 || b > 0) {
+                            newColorInt = Color(r / 255f, g / 255f, b / 255f).toArgb()
+                    }
+                }
+
+                bulb.copy(
+                    isOn = isOn,
+                    brightness = dimming,
+                    sceneMode = newSceneMode,
+                    temperature = newTemp,
+                    colorInt = newColorInt
+                )
+            } else {
+                bulb
+            }
+        }
+        bulbs = updatedBulbs
     }
 
     fun addBulb(name: String, ip: String) {
