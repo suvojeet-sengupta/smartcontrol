@@ -2,6 +2,7 @@ package com.suvojeet.smartcontrol.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,6 +77,28 @@ fun HorizontalGradientPicker(
                 .pointerInput(Unit) {
                     detectTapGestures { offset ->
                         val position = (offset.x / size.width).coerceIn(0f, 1f)
+                        selectedPosition = position
+                        
+                        // Map position to color
+                        val colorIndex = (position * (rainbowColors.size - 1))
+                        val lowerIndex = colorIndex.toInt().coerceIn(0, rainbowColors.size - 2)
+                        val upperIndex = lowerIndex + 1
+                        val fraction = colorIndex - lowerIndex
+                        
+                        val lowerColor = rainbowColors[lowerIndex]
+                        val upperColor = rainbowColors[upperIndex]
+                        
+                        val r = lowerColor.red + (upperColor.red - lowerColor.red) * fraction
+                        val g = lowerColor.green + (upperColor.green - lowerColor.green) * fraction
+                        val b = lowerColor.blue + (upperColor.blue - lowerColor.blue) * fraction
+                        
+                        onColorSelected(Color(r, g, b))
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures { change, _ ->
+                        change.consume()
+                        val position = (change.position.x / size.width).coerceIn(0f, 1f)
                         selectedPosition = position
                         
                         // Map position to color
