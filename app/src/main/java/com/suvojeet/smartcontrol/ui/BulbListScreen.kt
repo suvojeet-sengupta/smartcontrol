@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import com.suvojeet.smartcontrol.WizBulb
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -36,6 +38,7 @@ fun BulbListScreen(
     onAddBulb: (String, String) -> Unit,
     onDeleteBulbs: (List<String>) -> Unit,
     onToggleBulb: (String) -> Unit,
+    onBrightnessChange: (String, Float) -> Unit,
     onNavigateToDetail: (String) -> Unit
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
@@ -139,6 +142,7 @@ fun BulbListScreen(
                         isSelectionMode = isSelectionMode,
                         isSelected = isSelected,
                         onToggle = { onToggleBulb(bulb.id) },
+                        onBrightnessChange = { newBrightness -> onBrightnessChange(bulb.id, newBrightness) },
                         onClick = {
                             if (isSelectionMode) {
                                 if (isSelected) {
@@ -205,12 +209,15 @@ fun BulbCard(
     isSelectionMode: Boolean,
     isSelected: Boolean,
     onToggle: () -> Unit,
+    onBrightnessChange: (Float) -> Unit,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
     val isAvailable = bulb.isAvailable
-    val cardAlpha = if (isAvailable) 1f else 0.6f
-
+    
+    // Gesture handling for brightness
+    var accumulatedDrag by remember { mutableStateOf(0f) }
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -218,7 +225,28 @@ fun BulbCard(
                 enabled = isAvailable || isSelectionMode,
                 onClick = onClick,
                 onLongClick = onLongClick
-            ),
+            )
+            .pointerInput(Unit) {
+                if (isAvailable && !isSelectionMode && bulb.isOn) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = { accumulatedDrag = 0f },
+                        onDragCancel = { accumulatedDrag = 0f }
+                    ) { change, dragAmount ->
+                        change.consume()
+                        accumulatedDrag += dragAmount
+                        
+                        // Adjust sensitivity: 10px drag = 1% brightness change
+                        if (kotlin.math.abs(accumulatedDrag) > 10) {
+                            val changeAmount = (accumulatedDrag / 10).toInt()
+                            val newBrightness = (bulb.brightness + changeAmount).coerceIn(10f, 100f)
+                            if (newBrightness != bulb.brightness) {
+                                onBrightnessChange(newBrightness)
+                                accumulatedDrag = 0f // Reset after applying change
+                            }
+                        }
+                    }
+                }
+            },
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) Color(0xFF2A2A2A) else Color(0xFF1A1A1A)
         ),
