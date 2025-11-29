@@ -217,6 +217,7 @@ fun BulbCard(
     
     // Gesture handling for brightness
     var accumulatedDrag by remember { mutableStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
     
     Card(
         modifier = Modifier
@@ -229,15 +230,23 @@ fun BulbCard(
             .pointerInput(Unit) {
                 if (isAvailable && !isSelectionMode && bulb.isOn) {
                     detectHorizontalDragGestures(
-                        onDragEnd = { accumulatedDrag = 0f },
-                        onDragCancel = { accumulatedDrag = 0f }
+                        onDragStart = { isDragging = true },
+                        onDragEnd = { 
+                            isDragging = false 
+                            accumulatedDrag = 0f 
+                        },
+                        onDragCancel = { 
+                            isDragging = false 
+                            accumulatedDrag = 0f 
+                        }
                     ) { change, dragAmount ->
                         change.consume()
                         accumulatedDrag += dragAmount
                         
-                        // Adjust sensitivity: 10px drag = 1% brightness change
-                        if (kotlin.math.abs(accumulatedDrag) > 10) {
-                            val changeAmount = (accumulatedDrag / 10).toInt()
+                        // Increased sensitivity: 2px drag = 1% brightness change
+                        // This allows a ~180px swipe to cover the full 90% range (10-100)
+                        if (kotlin.math.abs(accumulatedDrag) > 2) {
+                            val changeAmount = (accumulatedDrag / 2).toInt()
                             val newBrightness = (bulb.brightness + changeAmount).coerceIn(10f, 100f)
                             if (newBrightness != bulb.brightness) {
                                 onBrightnessChange(newBrightness)
@@ -254,99 +263,111 @@ fun BulbCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = if (isSelected) BorderStroke(2.dp, Color(0xFF4CAF50)) else null
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Selection Indicator or Bulb Icon
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isSelectionMode) {
-                            if (isSelected) Color(0xFF4CAF50).copy(alpha = 0.2f) else Color(0xFF2A2A2A)
-                        } else {
-                            if (isAvailable && bulb.isOn) bulb.getComposeColor().copy(alpha = 0.2f)
-                            else Color(0xFF2A2A2A)
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isSelectionMode) {
-                    Icon(
-                        imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
-                        contentDescription = null,
-                        tint = if (isSelected) Color(0xFF4CAF50) else Color.Gray,
-                        modifier = Modifier.size(32.dp)
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Lightbulb,
-                        contentDescription = null,
-                        tint = if (isAvailable && bulb.isOn) bulb.getComposeColor() else Color.Gray,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Bulb info
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = bulb.name,
-                    color = if (isAvailable) Color.White else Color.Gray,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Brightness Overlay
+            if (isDragging && isAvailable && bulb.isOn) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(fraction = bulb.brightness / 100f)
+                        .background(Color.Yellow.copy(alpha = 0.1f))
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                if (isAvailable) {
-                    Text(
-                        text = bulb.ipAddress,
-                        color = Color.Gray,
-                        fontSize = 13.sp
-                    )
-                    if (bulb.isOn) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Brightness: ${bulb.brightness.toInt()}%",
-                            color = Color.Gray,
-                            fontSize = 12.sp
-                        )
-                    }
-                } else {
-                    Text(
-                        text = "Device Unavailable",
-                        color = Color.Red.copy(alpha = 0.7f),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
             }
 
-            // Power button (only show if not in selection mode)
-            if (!isSelectionMode) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Selection Indicator or Bulb Icon
                 Box(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
                         .background(
-                            if (isAvailable && bulb.isOn) Color.White
-                            else Color(0xFF2A2A2A)
-                        )
-                        .clickable(enabled = isAvailable, onClick = onToggle),
+                            if (isSelectionMode) {
+                                if (isSelected) Color(0xFF4CAF50).copy(alpha = 0.2f) else Color(0xFF2A2A2A)
+                            } else {
+                                if (isAvailable && bulb.isOn) bulb.getComposeColor().copy(alpha = 0.2f)
+                                else Color(0xFF2A2A2A)
+                            }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PowerSettingsNew,
-                        contentDescription = "Power",
-                        tint = if (isAvailable && bulb.isOn) Color.Black else Color.Gray,
-                        modifier = Modifier.size(28.dp)
+                    if (isSelectionMode) {
+                        Icon(
+                            imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
+                            contentDescription = null,
+                            tint = if (isSelected) Color(0xFF4CAF50) else Color.Gray,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            tint = if (isAvailable && bulb.isOn) bulb.getComposeColor() else Color.Gray,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // Bulb info
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = bulb.name,
+                        color = if (isAvailable) Color.White else Color.Gray,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    if (isAvailable) {
+                        Text(
+                            text = bulb.ipAddress,
+                            color = Color.Gray,
+                            fontSize = 13.sp
+                        )
+                        if (bulb.isOn) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Brightness: ${bulb.brightness.toInt()}%",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "Device Unavailable",
+                            color = Color.Red.copy(alpha = 0.7f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // Power button (only show if not in selection mode)
+                if (!isSelectionMode) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isAvailable && bulb.isOn) Color.White
+                                else Color(0xFF2A2A2A)
+                            )
+                            .clickable(enabled = isAvailable, onClick = onToggle),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PowerSettingsNew,
+                            contentDescription = "Power",
+                            tint = if (isAvailable && bulb.isOn) Color.Black else Color.Gray,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
         }
