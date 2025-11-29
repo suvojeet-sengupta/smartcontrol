@@ -76,7 +76,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     fun updateTemperature(id: String, temp: Int) {
-        bulbs = bulbs.map { if (it.id == id) it.copy(temperature = temp, sceneMode = null) else it }
+        bulbs = bulbs.map { 
+            if (it.id == id) {
+                it.copy(
+                    temperature = temp, 
+                    sceneMode = null,
+                    colorInt = Color.White.toArgb() // Reset color to ensure white mode is active
+                ) 
+            } else it 
+        }
         syncWithBulb(id)
         repository.saveDevices(bulbs)
     }
