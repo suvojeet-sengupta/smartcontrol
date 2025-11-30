@@ -13,6 +13,7 @@ import com.suvojeet.smartcontrol.network.WizUdpController
 import com.suvojeet.smartcontrol.network.BulbDiscovery
 import com.suvojeet.smartcontrol.network.DiscoveredBulb
 import com.suvojeet.smartcontrol.network.BluetoothController
+import com.suvojeet.smartcontrol.data.BulbEnergyUsage
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -84,12 +85,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         
         val updatedBulbs = bulbs.map { bulb ->
             // Calculate energy for this bulb for the 3s interval
-            // Formula: (9W * (brightness/100)) * (3/3600 hours)
+            // Formula: (bulb.wattage * (brightness/100)) * (3/3600 hours)
             if (bulb.isOn) {
-                val watts = 9f * (bulb.brightness / 100f)
+                val watts = bulb.wattage * (bulb.brightness / 100f)
                 val hours = 3f / 3600f
                 val energyWh = watts * hours
                 totalEnergyIncrement += energyWh
+                
+                // Track per-bulb usage
+                energyRepository.addBulbUsage(bulb.id, energyWh)
             }
 
             // Check cooldown
@@ -198,6 +202,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         syncWithBulb(id)
         repository.saveDevices(bulbs)
+    }
+    
+    fun updateBulbWattage(id: String, wattage: Float) {
+        bulbs = bulbs.map { if (it.id == id) it.copy(wattage = wattage) else it }
+        repository.saveDevices(bulbs)
+    }
+    
+    fun getBulbUsageHistory(bulbId: String): List<BulbEnergyUsage> {
+        return energyRepository.getBulbUsageHistory(bulbId)
+    }
+    
+    fun getBulbUsageToday(bulbId: String): Float {
+        return energyRepository.getBulbUsageToday(bulbId)
     }
 
     private val sceneMap = mapOf(
