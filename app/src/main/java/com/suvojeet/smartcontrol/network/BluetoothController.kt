@@ -24,23 +24,30 @@ class BluetoothController(context: Context) {
         @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val device = result.device
-            val name = device.name ?: result.scanRecord?.deviceName ?: "Unknown Device"
+            val scanRecord = result.scanRecord
+            val name = device.name ?: scanRecord?.deviceName ?: "Unknown Device"
+            val serviceUuids = scanRecord?.serviceUuids ?: emptyList()
             
-            Log.d("BluetoothController", "Scanned: $name - ${device.address}")
+            Log.d("BluetoothController", "Scanned: $name - ${device.address} - UUIDs: $serviceUuids")
+            
+            // Tuya devices use Service UUID 0xFD50
+            val isTuyaDevice = serviceUuids.any { it.uuid.toString().contains("fd50", ignoreCase = true) }
             
             // Broadened filter to catch more potential smart lights
             // Wipro lights might advertise as "Wipro", "WiZ", "Smart Light", etc.
+            // OR if they have the Tuya Service UUID
             if (name.contains("WiZ", ignoreCase = true) || 
                 name.contains("Wipro", ignoreCase = true) ||
                 name.contains("Smart", ignoreCase = true) ||
                 name.contains("Light", ignoreCase = true) ||
                 name.contains("Bulb", ignoreCase = true) ||
-                name.contains("LED", ignoreCase = true)) {
+                name.contains("LED", ignoreCase = true) ||
+                isTuyaDevice) {
                 
                 val discovered = DiscoveredBulb(
                     ipAddress = device.address, // Use MAC as IP for BLE devices temporarily
                     macAddress = device.address,
-                    name = name,
+                    name = if (isTuyaDevice && name == "Unknown Device") "Wipro/Tuya Light" else name,
                     isBle = true
                 )
                 onDeviceFound?.invoke(discovered)
