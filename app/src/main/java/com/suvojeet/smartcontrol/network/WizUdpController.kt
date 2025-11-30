@@ -83,7 +83,8 @@ object WizUdpController {
                 val wizResponse = gson.fromJson(response, WizResponse::class.java)
                 
                 // Convert back to map for compatibility with existing code
-                wizResponse.result?.let { result ->
+                val result = wizResponse.result
+                if (result != null) {
                     mapOf(
                         "mac" to result.mac,
                         "rssi" to result.rssi,
@@ -98,6 +99,8 @@ object WizUdpController {
                         "w" to result.w,
                         "speed" to result.speed
                     ).filterValues { it != null }
+                } else {
+                    null
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting status from $ip: ${e.message}")
