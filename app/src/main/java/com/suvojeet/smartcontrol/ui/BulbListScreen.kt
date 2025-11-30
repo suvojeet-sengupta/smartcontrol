@@ -62,23 +62,6 @@ fun BulbListScreen(
             TopAppBar(
                 title = { 
                     if (isSelectionMode) {
-                        Text(
-                            "${selectedBulbIds.size} Selected",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    } else {
-                        Text(
-                            "Smart Control",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-            if (!isSelectionMode) {
-                FloatingActionButton(
-                    onClick = { 
-                        if (selectedTab == 0) onNavigateToSetup() else onNavigateToCreateGroup()
-                    },
                     containerColor = Color(0xFF4CAF50),
                     contentColor = Color.White
                 ) {

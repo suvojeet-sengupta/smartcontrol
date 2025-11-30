@@ -19,22 +19,6 @@ import kotlinx.coroutines.isActive
 import java.util.UUID
 
 // AndroidViewModel use kiya taaki Storage ke liye Context mil jaye
-class HomeViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val repository = DeviceRepository(application)
-    private val context = application.applicationContext
-    private val bluetoothController = BluetoothController(context)
-    
-    var bulbs by mutableStateOf<List<WizBulb>>(emptyList())
-        private set
-        repository.saveDevices(updatedList)
-    }
-
-    fun deleteBulbs(ids: List<String>) {
-        val updatedList = bulbs.filter { it.id !in ids }
-        bulbs = updatedList
-        repository.saveDevices(updatedList)
-    }
 
     fun toggleBulb(id: String) {
         lastUpdateMap[id] = System.currentTimeMillis()
