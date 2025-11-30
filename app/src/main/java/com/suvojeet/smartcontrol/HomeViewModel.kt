@@ -27,25 +27,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     var bulbs by mutableStateOf<List<WizBulb>>(emptyList())
         private set
-
-    // Groups state
-    var groups by mutableStateOf<List<BulbGroup>>(emptyList())
-        private set
-
-    // Discovery state
-    var discoveryState by mutableStateOf<DiscoveryState>(DiscoveryState.Idle)
-        private set
-            name = name,
-            ipAddress = ip
-        )
-        val updatedList = bulbs + newBulb
-        bulbs = updatedList
-        repository.saveDevices(updatedList)
-    }
-    
-    fun deleteBulb(id: String) {
-        val updatedList = bulbs.filter { it.id != id }
-        bulbs = updatedList
         repository.saveDevices(updatedList)
     }
 
