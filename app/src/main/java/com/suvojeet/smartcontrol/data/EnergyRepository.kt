@@ -7,15 +7,15 @@ import com.google.gson.reflect.TypeToken
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
 data class DailyEnergyUsage(
     val date: String, // Format: YYYY-MM-DD
     val energyWh: Float
 )
 
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Singleton
 class EnergyRepository @Inject constructor(@ApplicationContext context: Context) {
