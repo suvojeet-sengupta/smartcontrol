@@ -13,7 +13,8 @@ import javax.inject.Inject
 
 class ToggleBulbUseCase @Inject constructor(
     private val repository: DeviceRepository,
-    private val bluetoothController: BluetoothController
+    private val bluetoothController: BluetoothController,
+    private val wizUdpController: WizUdpController
 ) {
     private val sceneMap = mapOf(
         "ocean" to 1, "romance" to 2, "sunset" to 3, "party" to 4,
@@ -84,7 +85,7 @@ class ToggleBulbUseCase @Inject constructor(
                     }
                 }
                 
-                WizUdpController.sendCommand(bulb.ipAddress, params)
+                wizUdpController.sendCommand(bulb.ipAddress, params)
             }
         }
     }

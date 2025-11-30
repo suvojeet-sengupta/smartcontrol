@@ -23,7 +23,7 @@ class DeviceRepositoryImpl @Inject constructor(
     private val KEY_DEVICES = "saved_devices"
     private val KEY_GROUPS = "saved_groups"
 
-    private val _bulbs = MutableStateFlow<List<WizBulb>>(emptyList())
+    private val _bulbs = MutableStateFlow<Resource<List<WizBulb>>>(Resource.Loading())
     private val _groups = MutableStateFlow<List<BulbGroup>>(emptyList())
 
     init {
@@ -32,10 +32,17 @@ class DeviceRepositoryImpl @Inject constructor(
     }
 
     private fun loadDevices() {
-        val json = prefs.getString(KEY_DEVICES, null)
-        if (json != null) {
-            val type = object : TypeToken<List<WizBulb>>() {}.type
-            _bulbs.value = gson.fromJson(json, type)
+        try {
+            val json = prefs.getString(KEY_DEVICES, null)
+            if (json != null) {
+                val type = object : TypeToken<List<WizBulb>>() {}.type
+                val list: List<WizBulb> = gson.fromJson(json, type)
+                _bulbs.value = Resource.Success(list)
+            } else {
+                _bulbs.value = Resource.Success(emptyList())
+            }
+        } catch (e: Exception) {
+            _bulbs.value = Resource.Error("Failed to load devices: ${e.message}")
         }
     }
 
@@ -47,28 +54,30 @@ class DeviceRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun getBulbs(): Flow<List<WizBulb>> = _bulbs.asStateFlow()
+    override fun getBulbs(): Flow<Resource<List<WizBulb>>> = _bulbs.asStateFlow()
 
     override fun getGroups(): Flow<List<BulbGroup>> = _groups.asStateFlow()
 
     override suspend fun addBulb(bulb: WizBulb) {
-        val current = _bulbs.value.toMutableList()
-        current.add(bulb)
-        saveDevices(current)
+        val currentList = _bulbs.value.data ?: emptyList()
+        val updatedList = currentList.toMutableList().apply { add(bulb) }
+        saveDevices(updatedList)
     }
 
     override suspend fun deleteBulb(id: String) {
-        val current = _bulbs.value.filter { it.id != id }
-        saveDevices(current)
+        val currentList = _bulbs.value.data ?: emptyList()
+        val updatedList = currentList.filter { it.id != id }
+        saveDevices(updatedList)
     }
 
     override suspend fun updateBulb(bulb: WizBulb) {
-        val current = _bulbs.value.map { if (it.id == bulb.id) bulb else it }
-        saveDevices(current)
+        val currentList = _bulbs.value.data ?: emptyList()
+        val updatedList = currentList.map { if (it.id == bulb.id) bulb else it }
+        saveDevices(updatedList)
     }
 
     override suspend fun saveDevices(devices: List<WizBulb>) {
-        _bulbs.value = devices
+        _bulbs.value = Resource.Success(devices)
         val json = gson.toJson(devices)
         prefs.edit().putString(KEY_DEVICES, json).apply()
     }

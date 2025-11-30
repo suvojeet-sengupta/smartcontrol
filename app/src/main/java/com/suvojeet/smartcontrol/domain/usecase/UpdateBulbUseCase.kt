@@ -14,7 +14,8 @@ import javax.inject.Inject
 
 class UpdateBulbUseCase @Inject constructor(
     private val repository: DeviceRepository,
-    private val bluetoothController: BluetoothController
+    private val bluetoothController: BluetoothController,
+    private val wizUdpController: WizUdpController
 ) {
     suspend fun updateBrightness(bulb: WizBulb, brightness: Float) {
         val updatedBulb = bulb.copy(brightness = brightness)
@@ -34,7 +35,7 @@ class UpdateBulbUseCase @Inject constructor(
                     "state" to true,
                     "dimming" to brightness.toInt().coerceIn(10, 100)
                 )
-                WizUdpController.sendCommand(bulb.ipAddress, params)
+                wizUdpController.sendCommand(bulb.ipAddress, params)
             }
         }
     }
@@ -66,7 +67,7 @@ class UpdateBulbUseCase @Inject constructor(
                     "g" to (color.green * 255).toInt(),
                     "b" to (color.blue * 255).toInt()
                 )
-                WizUdpController.sendCommand(bulb.ipAddress, params)
+                wizUdpController.sendCommand(bulb.ipAddress, params)
             }
         }
     }
@@ -93,7 +94,7 @@ class UpdateBulbUseCase @Inject constructor(
                     "state" to true,
                     "temp" to temp
                 )
-                WizUdpController.sendCommand(bulb.ipAddress, params)
+                wizUdpController.sendCommand(bulb.ipAddress, params)
             }
         }
     }
@@ -110,7 +111,7 @@ class UpdateBulbUseCase @Inject constructor(
                     "state" to true,
                     "sceneId" to sceneId
                 )
-                WizUdpController.sendCommand(bulb.ipAddress, params)
+                wizUdpController.sendCommand(bulb.ipAddress, params)
             }
         }
     }

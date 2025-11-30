@@ -5,7 +5,7 @@ import com.suvojeet.smartcontrol.BulbGroup
 import kotlinx.coroutines.flow.Flow
 
 interface DeviceRepository {
-    fun getBulbs(): Flow<List<WizBulb>>
+    fun getBulbs(): Flow<Resource<List<WizBulb>>>
     fun getGroups(): Flow<List<BulbGroup>>
     
     suspend fun addBulb(bulb: WizBulb)

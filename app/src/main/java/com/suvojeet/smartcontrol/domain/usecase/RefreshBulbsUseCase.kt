@@ -13,7 +13,8 @@ import javax.inject.Inject
 
 class RefreshBulbsUseCase @Inject constructor(
     private val deviceRepository: DeviceRepository,
-    private val energyRepository: EnergyRepository
+    private val energyRepository: EnergyRepository,
+    private val wizUdpController: WizUdpController
 ) {
     // Map to track last update time for cooldown logic
     private val lastUpdateMap = mutableMapOf<String, Long>()
@@ -30,7 +31,8 @@ class RefreshBulbsUseCase @Inject constructor(
     )
 
     suspend operator fun invoke() {
-        val bulbs = deviceRepository.getBulbs().first()
+        val resource = deviceRepository.getBulbs().first()
+        val bulbs = resource.data ?: return // If loading or error with no data, skip refresh
         var totalEnergyIncrement = 0f
         
         val updatedBulbs = bulbs.map { bulb ->
@@ -51,7 +53,7 @@ class RefreshBulbsUseCase @Inject constructor(
                 return@map bulb // Skip update if within cooldown
             }
 
-            val status = WizUdpController.getBulbStatus(bulb.ipAddress)
+            val status = wizUdpController.getBulbStatus(bulb.ipAddress)
             if (status != null) {
                 val result = status["result"] as? Map<String, Any> ?: status
                 

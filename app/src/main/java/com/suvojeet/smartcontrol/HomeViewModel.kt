@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.suvojeet.smartcontrol.data.DeviceRepository
 import com.suvojeet.smartcontrol.data.EnergyRepository
 import com.suvojeet.smartcontrol.data.BulbEnergyUsage
+import com.suvojeet.smartcontrol.data.Resource
 import com.suvojeet.smartcontrol.domain.usecase.GetBulbsUseCase
 import com.suvojeet.smartcontrol.domain.usecase.RefreshBulbsUseCase
 import com.suvojeet.smartcontrol.domain.usecase.ToggleBulbUseCase
@@ -34,8 +35,8 @@ class HomeViewModel @Inject constructor(
     private val refreshBulbsUseCase: RefreshBulbsUseCase,
     private val repository: DeviceRepository,
     private val energyRepository: EnergyRepository,
-    private val application: Application // Kept for Discovery context if needed, though Discovery should ideally be injected too
-) : ViewModel() { // Changed from AndroidViewModel to ViewModel
+    private val application: Application
+) : ViewModel() {
 
     // State backed by Flow
     var bulbs by mutableStateOf<List<WizBulb>>(emptyList())
@@ -57,11 +58,33 @@ class HomeViewModel @Inject constructor(
     var todayUsage by mutableStateOf(0f)
         private set
 
+    var isLoading by mutableStateOf(false)
+        private set
+
+    var errorMessage by mutableStateOf<String?>(null)
+        private set
+
     init {
         // Collect Flows
         viewModelScope.launch {
-            getBulbsUseCase().collectLatest {
-                bulbs = it
+            getBulbsUseCase().collectLatest { resource ->
+                when (resource) {
+                    is Resource.Loading -> {
+                        isLoading = true
+                    }
+                    is Resource.Success -> {
+                        isLoading = false
+                        bulbs = resource.data ?: emptyList()
+                        errorMessage = null
+                    }
+                    is Resource.Error -> {
+                        isLoading = false
+                        errorMessage = resource.message
+                        if (resource.data != null) {
+                            bulbs = resource.data
+                        }
+                    }
+                }
             }
         }
         
@@ -167,13 +190,6 @@ class HomeViewModel @Inject constructor(
     fun updateScene(id: String, scene: String?) {
         viewModelScope.launch {
             val bulb = bulbs.find { it.id == id } ?: return@launch
-            // We need sceneId from map. 
-            // Ideally UseCase should handle this mapping or take scene name.
-            // For now, let's map here or move map to UseCase.
-            // The UseCase has updateScene(bulb, sceneId, sceneName)
-            // I need the map here to get ID.
-            // I'll duplicate the map or make it public in UseCase.
-            // For now, I'll copy the map here to keep it working quickly.
             val sceneId = sceneMap[scene] ?: 0
             if (sceneId > 0 && scene != null) {
                 updateBulbUseCase.updateScene(bulb, sceneId, scene)

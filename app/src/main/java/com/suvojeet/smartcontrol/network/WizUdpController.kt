@@ -4,16 +4,20 @@ import android.util.Log
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
- * WiZ UDP Controller - Now with type-safe data classes! 🛡️
- * No more manual JSON string construction
+ * WiZ UDP Controller - Now with type-safe data classes and Connection Pooling! 🛡️
  */
-object WizUdpController {
-    private const val TAG = "WizController"
+@Singleton
+class WizUdpController @Inject constructor(
+    private val socketManager: WizSocketManager
+) {
+    companion object {
+        private const val TAG = "WizController"
+    }
+    
     private val gson = Gson()
 
     /**
@@ -38,14 +42,9 @@ object WizUdpController {
                 
                 val request = WizRequestBuilder.setPilotRequest(setPilotParams)
                 val json = gson.toJson(request)
-
-                val socket = DatagramSocket()
-                val address = InetAddress.getByName(ip)
                 val buffer = json.toByteArray()
 
-                val packet = DatagramPacket(buffer, buffer.size, address, WizConstants.WIZ_PORT)
-                socket.send(packet)
-                socket.close()
+                socketManager.sendPacket(buffer, ip, WizConstants.WIZ_PORT)
 
                 Log.d(TAG, "Sent to $ip: $json")
             } catch (e: Exception) {
@@ -60,46 +59,41 @@ object WizUdpController {
     suspend fun getBulbStatus(ip: String): Map<String, Any>? {
         return withContext<Map<String, Any>?>(Dispatchers.IO) {
             try {
-                val socket = DatagramSocket()
-                socket.soTimeout = WizConstants.SOCKET_TIMEOUT
-                val address = InetAddress.getByName(ip)
-                
                 // Use type-safe request builder
                 val request = WizRequestBuilder.getPilotRequest()
                 val json = gson.toJson(request)
                 val buffer = json.toByteArray()
-                val packet = DatagramPacket(buffer, buffer.size, address, WizConstants.WIZ_PORT)
-                socket.send(packet)
-
-                val receiveBuffer = ByteArray(1024)
-                val receivePacket = DatagramPacket(receiveBuffer, receiveBuffer.size)
-                socket.receive(receivePacket)
-                socket.close()
-
-                val response = String(receivePacket.data, 0, receivePacket.length)
-                Log.d(TAG, "Received from $ip: $response")
                 
-                // Parse using WizResponse data class
-                val wizResponse = gson.fromJson(response, WizResponse::class.java)
+                val receivePacket = socketManager.sendAndReceive(buffer, ip, WizConstants.WIZ_PORT)
                 
-                // Convert back to map for compatibility with existing code
-                val result = wizResponse.result
-                if (result != null) {
-                    @Suppress("UNCHECKED_CAST")
-                    mapOf(
-                        "mac" to result.mac,
-                        "rssi" to result.rssi,
-                        "state" to result.state,
-                        "sceneId" to result.sceneId,
-                        "temp" to result.temp,
-                        "dimming" to result.dimming,
-                        "r" to result.r,
-                        "g" to result.g,
-                        "b" to result.b,
-                        "c" to result.c,
-                        "w" to result.w,
-                        "speed" to result.speed
-                    ).filterValues { it != null } as Map<String, Any>
+                if (receivePacket != null) {
+                    val response = String(receivePacket.data, 0, receivePacket.length)
+                    Log.d(TAG, "Received from $ip: $response")
+                    
+                    // Parse using WizResponse data class
+                    val wizResponse = gson.fromJson(response, WizResponse::class.java)
+                    
+                    // Convert back to map for compatibility with existing code
+                    val result = wizResponse.result
+                    if (result != null) {
+                        @Suppress("UNCHECKED_CAST")
+                        mapOf(
+                            "mac" to result.mac,
+                            "rssi" to result.rssi,
+                            "state" to result.state,
+                            "sceneId" to result.sceneId,
+                            "temp" to result.temp,
+                            "dimming" to result.dimming,
+                            "r" to result.r,
+                            "g" to result.g,
+                            "b" to result.b,
+                            "c" to result.c,
+                            "w" to result.w,
+                            "speed" to result.speed
+                        ).filterValues { it != null } as Map<String, Any>
+                    } else {
+                        null
+                    }
                 } else {
                     null
                 }
