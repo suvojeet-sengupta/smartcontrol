@@ -19,6 +19,159 @@ import kotlinx.coroutines.isActive
 import java.util.UUID
 
 // AndroidViewModel use kiya taaki Storage ke liye Context mil jaye
+class HomeViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = DeviceRepository(application)
+    private val context = application.applicationContext
+    private val bluetoothController = BluetoothController(context)
+    
+    var bulbs by mutableStateOf<List<WizBulb>>(emptyList())
+        private set
+
+    // Groups state
+    var groups by mutableStateOf<List<BulbGroup>>(emptyList())
+        private set
+
+    // Discovery state
+    var discoveryState by mutableStateOf<DiscoveryState>(DiscoveryState.Idle)
+        private set
+    
+    var discoveredBulbs by mutableStateOf<List<DiscoveredBulb>>(emptyList())
+        private set
+
+    private val lastUpdateMap = mutableMapOf<String, Long>()
+    
+    private val energyRepository = com.suvojeet.smartcontrol.data.EnergyRepository(application)
+    
+    var energyUsageHistory by mutableStateOf<List<com.suvojeet.smartcontrol.data.DailyEnergyUsage>>(emptyList())
+        private set
+        
+    var todayUsage by mutableStateOf(0f)
+        private set
+
+    init {
+        // App khulte hi purane saved bulbs load karo
+        loadBulbs()
+        loadGroups()
+        loadEnergyData()
+        startPolling()
+    }
+    
+    private fun loadEnergyData() {
+        energyUsageHistory = energyRepository.getDailyUsage()
+        todayUsage = energyRepository.getTotalUsageToday()
+    }
+
+    private fun loadBulbs() {
+        bulbs = repository.getDevices()
+    }
+
+    private fun loadGroups() {
+        groups = repository.getGroups()
+    }
+
+    private fun startPolling() {
+        viewModelScope.launch {
+            while (isActive) {
+                refreshBulbStatuses()
+                delay(3000) // Poll every 3 seconds
+            }
+        }
+    }
+
+    private suspend fun refreshBulbStatuses() {
+        var totalEnergyIncrement = 0f
+        
+        val updatedBulbs = bulbs.map { bulb ->
+            // Calculate energy for this bulb for the 3s interval
+            // Formula: (9W * (brightness/100)) * (3/3600 hours)
+            if (bulb.isOn) {
+                val watts = 9f * (bulb.brightness / 100f)
+                val hours = 3f / 3600f
+                val energyWh = watts * hours
+                totalEnergyIncrement += energyWh
+            }
+
+            // Check cooldown
+            val lastUpdate = lastUpdateMap[bulb.id] ?: 0L
+            if (System.currentTimeMillis() - lastUpdate < 3000) {
+                return@map bulb // Skip update if within cooldown
+            }
+
+            val status = WizUdpController.getBulbStatus(bulb.ipAddress)
+            if (status != null) {
+                val result = status["result"] as? Map<String, Any> ?: status
+                
+                val isOn = result["state"] as? Boolean ?: bulb.isOn
+                val dimming = (result["dimming"] as? Number)?.toFloat() ?: bulb.brightness
+                val sceneId = (result["sceneId"] as? Number)?.toInt() ?: 0
+                val temp = (result["temp"] as? Number)?.toInt() ?: 0
+                val r = (result["r"] as? Number)?.toInt() ?: 0
+                val g = (result["g"] as? Number)?.toInt() ?: 0
+                val b = (result["b"] as? Number)?.toInt() ?: 0
+
+                var newSceneMode: String? = null
+                var newColorInt = bulb.colorInt
+                var newTemp = bulb.temperature
+
+                if (sceneId > 0) {
+                    // Find scene name from ID
+                    newSceneMode = sceneMap.entries.find { it.value == sceneId }?.key
+                } else if (temp > 0) {
+                    newTemp = temp
+                    newSceneMode = null
+                    newColorInt = Color.White.toArgb()
+                } else {
+                    // Color mode
+                    newSceneMode = null
+                    if (r > 0 || g > 0 || b > 0) {
+                            newColorInt = Color(r / 255f, g / 255f, b / 255f).toArgb()
+                    }
+                }
+
+                bulb.copy(
+                    isOn = isOn,
+                    brightness = dimming,
+                    sceneMode = newSceneMode,
+                    temperature = newTemp,
+                    colorInt = newColorInt,
+                    isAvailable = true
+                )
+            } else {
+                bulb.copy(isAvailable = false)
+            }
+        }
+        bulbs = updatedBulbs
+        
+        // Update energy repository if any usage occurred
+        if (totalEnergyIncrement > 0) {
+            energyRepository.addUsage(totalEnergyIncrement)
+            todayUsage += totalEnergyIncrement
+        }
+    }
+
+    fun addBulb(name: String, ip: String) {
+        val newBulb = WizBulb(
+            id = UUID.randomUUID().toString(),
+            name = name,
+            ipAddress = ip
+        )
+        val updatedList = bulbs + newBulb
+        bulbs = updatedList
+        repository.saveDevices(updatedList)
+    }
+
+    fun deleteBulb(id: String) {
+        val updatedList = bulbs.filter { it.id != id }
+        bulbs = updatedList
+        repository.saveDevices(updatedList)
+    }
+
+    fun deleteBulbs(ids: List<String>) {
+        val updatedList = bulbs.filter { it.id !in ids }
+        bulbs = updatedList
+        repository.saveDevices(updatedList)
+    }
 
     fun toggleBulb(id: String) {
         lastUpdateMap[id] = System.currentTimeMillis()

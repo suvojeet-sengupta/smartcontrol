@@ -62,6 +62,42 @@ fun BulbListScreen(
             TopAppBar(
                 title = { 
                     if (isSelectionMode) {
+                        Text(
+                            "${selectedBulbIds.size} Selected",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            "Smart Control",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                actions = {
+                    if (isSelectionMode) {
+                        IconButton(onClick = { selectedBulbIds = emptySet() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel Selection")
+                        }
+                        IconButton(onClick = { showDeleteConfirmation = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF0A0A0A),
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                )
+            )
+        },
+        floatingActionButton = {
+            if (!isSelectionMode) {
+                FloatingActionButton(
+                    onClick = { 
+                        if (selectedTab == 0) onNavigateToSetup() else onNavigateToCreateGroup()
+                    },
                     containerColor = Color(0xFF4CAF50),
                     contentColor = Color.White
                 ) {
