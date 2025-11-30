@@ -39,7 +39,7 @@ class WizSocketManager @Inject constructor() {
         mutex.withLock {
             return try {
                 val socket = getSocket()
-                socket.soTimeout = timeout
+                val deadline = System.currentTimeMillis() + timeout
                 
                 val address = InetAddress.getByName(ip)
                 val sendPacket = DatagramPacket(data, data.size, address, port)
@@ -47,15 +47,24 @@ class WizSocketManager @Inject constructor() {
                 
                 val buffer = ByteArray(1024)
                 val receivePacket = DatagramPacket(buffer, buffer.size)
-                socket.receive(receivePacket)
                 
-                // Simple verification: check if response is from the target IP
-                if (receivePacket.address.hostAddress == ip) {
-                    receivePacket
-                } else {
-                    null
+                while (System.currentTimeMillis() < deadline) {
+                    try {
+                        val remainingTime = (deadline - System.currentTimeMillis()).toInt()
+                        if (remainingTime <= 0) break
+                        
+                        socket.soTimeout = remainingTime
+                        socket.receive(receivePacket)
+                        
+                        // Check if response is from the target IP
+                        if (receivePacket.address.hostAddress == ip) {
+                            return receivePacket
+                        }
+                        // If not from target IP, loop again (ignore stray packet)
+                    } catch (e: java.net.SocketTimeoutException) {
+                        break // Timeout reached
+                    }
                 }
-            } catch (e: java.net.SocketTimeoutException) {
                 null
             } catch (e: Exception) {
                 e.printStackTrace()
