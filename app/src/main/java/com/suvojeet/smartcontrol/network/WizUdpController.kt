@@ -58,7 +58,7 @@ object WizUdpController {
      * Get bulb status using type-safe data classes
      */
     suspend fun getBulbStatus(ip: String): Map<String, Any>? {
-        return withContext(Dispatchers.IO) {
+        return withContext<Map<String, Any>?>(Dispatchers.IO) {
             try {
                 val socket = DatagramSocket()
                 socket.soTimeout = WizConstants.SOCKET_TIMEOUT
@@ -84,7 +84,8 @@ object WizUdpController {
                 
                 // Convert back to map for compatibility with existing code
                 val result = wizResponse.result
-                return@withContext if (result != null) {
+                if (result != null) {
+                    @Suppress("UNCHECKED_CAST")
                     mapOf(
                         "mac" to result.mac,
                         "rssi" to result.rssi,
@@ -98,13 +99,13 @@ object WizUdpController {
                         "c" to result.c,
                         "w" to result.w,
                         "speed" to result.speed
-                    ).filterValues { it != null }
+                    ).filterValues { it != null } as Map<String, Any>
                 } else {
                     null
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting status from $ip: ${e.message}")
-                return@withContext null
+                null
             }
         }
     }
