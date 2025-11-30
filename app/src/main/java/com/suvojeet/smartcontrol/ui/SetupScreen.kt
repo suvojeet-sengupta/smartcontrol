@@ -2,7 +2,6 @@ package com.suvojeet.smartcontrol.ui
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,19 +10,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.suvojeet.smartcontrol.DiscoveryState
 import com.suvojeet.smartcontrol.network.DiscoveredBulb
 
@@ -41,6 +45,31 @@ fun SetupScreen(
     var currentStep by remember { mutableStateOf(0) }
     var bulbName by remember { mutableStateOf("") }
     var bulbIp by remember { mutableStateOf("") }
+    
+    // Permission handling
+    val context = LocalContext.current
+    val permissionsToRequest = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        arrayOf(
+            android.Manifest.permission.BLUETOOTH_SCAN,
+            android.Manifest.permission.BLUETOOTH_CONNECT,
+            android.Manifest.permission.ACCESS_FINE_LOCATION
+        )
+    } else {
+        arrayOf(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.BLUETOOTH,
+            android.Manifest.permission.BLUETOOTH_ADMIN
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.entries.all { it.value }
+        if (allGranted) {
+            onStartDiscovery()
+        }
+    }
 
     Scaffold(
         containerColor = Color.Black,
@@ -75,7 +104,7 @@ fun SetupScreen(
                     1 -> DiscoveryStep(
                         discoveryState = discoveryState,
                         discoveredBulbs = discoveredBulbs,
-                        onStartDiscovery = onStartDiscovery,
+                        onStartDiscovery = { permissionLauncher.launch(permissionsToRequest) },
                         onAddBulb = onAddDiscoveredBulb,
                         onAddAll = {
                             onAddAllDiscovered()
@@ -171,7 +200,7 @@ fun DiscoveryStep(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Automatically discover WiZ bulbs on your network",
+            "Scanning via Wi-Fi and Bluetooth...",
             color = Color.Gray,
             fontSize = 14.sp,
             textAlign = TextAlign.Center
@@ -200,7 +229,7 @@ fun DiscoveryStep(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Scanning network...",
+                    "Scanning...",
                     color = Color.White,
                     fontSize = 16.sp
                 )
@@ -256,7 +285,7 @@ fun DiscoveryStep(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "Make sure your bulbs are powered on and connected to the same WiFi network.",
+                    "Make sure your bulbs are powered on.",
                     color = Color.Gray,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
@@ -327,7 +356,7 @@ fun DiscoveredBulbCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Lightbulb,
+                        imageVector = if (bulb.isBle) Icons.Default.Bluetooth else Icons.Default.Wifi,
                         contentDescription = null,
                         tint = Color(0xFF00BCD4),
                         modifier = Modifier.size(24.dp)
@@ -344,7 +373,7 @@ fun DiscoveredBulbCard(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        bulb.ipAddress,
+                        if (bulb.isBle) "Bluetooth" else bulb.ipAddress,
                         color = Color.Gray,
                         fontSize = 12.sp
                     )

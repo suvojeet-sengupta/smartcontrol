@@ -11,9 +11,15 @@ data class WizBulb(
     val colorInt: Int = Color.White.hashCode(),
     val temperature: Int = 4000, // Kelvin: 2700 (warm) to 6500 (cool)
     val sceneMode: String? = null, // null = manual, or scene name like "fireplace", "sunset", etc.
-    val isAvailable: Boolean = true
+    val isAvailable: Boolean = true,
+    val macAddress: String = "",
+    val connectionType: ConnectionType = ConnectionType.WIFI
 ) {
     fun getComposeColor(): Color {
         return Color(colorInt)
     }
+}
+
+enum class ConnectionType {
+    WIFI, BLE
 }

@@ -12,6 +12,7 @@ import com.suvojeet.smartcontrol.data.DeviceRepository
 import com.suvojeet.smartcontrol.network.WizUdpController
 import com.suvojeet.smartcontrol.network.BulbDiscovery
 import com.suvojeet.smartcontrol.network.DiscoveredBulb
+import com.suvojeet.smartcontrol.network.BluetoothController
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -22,6 +23,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = DeviceRepository(application)
     private val context = application.applicationContext
+    private val bluetoothController = BluetoothController(context)
     
     var bulbs by mutableStateOf<List<WizBulb>>(emptyList())
         private set
@@ -203,6 +205,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun syncWithBulb(id: String) {
         val bulb = bulbs.find { it.id == id } ?: return
         
+        if (bulb.connectionType == ConnectionType.BLE) {
+            // BLE Control
+            viewModelScope.launch {
+                try {
+                    bluetoothController.connect(bulb.macAddress, context)
+                    // Small delay to ensure connection
+                    delay(500)
+                    
+                    if (bulb.isOn) {
+                        bluetoothController.setPower(true)
+                        bluetoothController.setBrightness(bulb.brightness.toInt())
+                        
+                        if (bulb.temperature > 0 && bulb.colorInt == Color.White.toArgb()) {
+                            bluetoothController.setTemperature(bulb.temperature)
+                        } else {
+                            val color = bulb.getComposeColor()
+                            bluetoothController.setColor(
+                                (color.red * 255).toInt(),
+                                (color.green * 255).toInt(),
+                                (color.blue * 255).toInt()
+                            )
+                        }
+                    } else {
+                        bluetoothController.setPower(false)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            return
+        }
+        
         viewModelScope.launch {
             val params = mutableMapOf<String, Any>(
                 "state" to bulb.isOn,
@@ -328,29 +362,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addDiscoveredBulb(discoveredBulb: DiscoveredBulb) {
-        val newBulb = WizBulb(
-            id = UUID.randomUUID().toString(),
-            name = discoveredBulb.name,
-            ipAddress = discoveredBulb.ipAddress
-        )
-        val updatedList = bulbs + newBulb
-        bulbs = updatedList
-        repository.saveDevices(updatedList)
-        
-        // Remove from discovered list
-        discoveredBulbs = discoveredBulbs.filter { it.ipAddress != discoveredBulb.ipAddress }
+    fun addDiscoveredBulb(discovered: DiscoveredBulb) {
+        if (bulbs.none { it.id == discovered.macAddress }) {
+            val newBulb = WizBulb(
+                id = discovered.macAddress,
+                name = discovered.name,
+                ipAddress = discovered.ipAddress,
+                macAddress = discovered.macAddress,
+                connectionType = if (discovered.isBle) ConnectionType.BLE else ConnectionType.WIFI
+            )
+            val updatedBulbs = bulbs + newBulb
+            bulbs = updatedBulbs
+            repository.saveDevices(updatedBulbs)
+            
+            // Remove from discovered list
+            discoveredBulbs = discoveredBulbs.filter { it.macAddress != discovered.macAddress }
+        }
     }
 
     fun addAllDiscoveredBulbs() {
         val newBulbs = discoveredBulbs.map { discovered ->
             WizBulb(
-                id = UUID.randomUUID().toString(),
+                id = discovered.macAddress,
                 name = discovered.name,
-                ipAddress = discovered.ipAddress
+                ipAddress = discovered.ipAddress,
+                macAddress = discovered.macAddress,
+                connectionType = if (discovered.isBle) ConnectionType.BLE else ConnectionType.WIFI
             )
         }
-        val updatedList = bulbs + newBulbs
+        // Filter out duplicates again just in case
+        val uniqueNewBulbs = newBulbs.filter { new -> bulbs.none { it.id == new.id } }
+        
+        val updatedList = bulbs + uniqueNewBulbs
         bulbs = updatedList
         repository.saveDevices(updatedList)
         
