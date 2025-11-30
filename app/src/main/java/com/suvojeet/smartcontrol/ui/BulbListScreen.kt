@@ -42,6 +42,7 @@ fun BulbListScreen(
     groups: List<BulbGroup> = emptyList(),
     onNavigateToSetup: () -> Unit,
     onNavigateToCreateGroup: () -> Unit,
+    onNavigateToEnergyDashboard: () -> Unit,
     onDeleteBulbs: (List<String>) -> Unit,
     onToggleBulb: (String) -> Unit,
     onBrightnessChange: (String, Float) -> Unit,
@@ -82,6 +83,10 @@ fun BulbListScreen(
                         }
                         IconButton(onClick = { showDeleteConfirmation = true }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        }
+                    } else {
+                        IconButton(onClick = onNavigateToEnergyDashboard) {
+                            Icon(Icons.Default.Bolt, contentDescription = "Energy Dashboard")
                         }
                     }
                 },

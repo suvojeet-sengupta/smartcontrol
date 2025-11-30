@@ -36,6 +36,7 @@ fun SmartControlNavigation(viewModel: HomeViewModel = viewModel()) {
                 groups = viewModel.groups,
                 onNavigateToSetup = { navController.navigate(Screen.Setup.route) },
                 onNavigateToCreateGroup = { navController.navigate(Screen.CreateGroup.route) },
+                onNavigateToEnergyDashboard = { navController.navigate(Screen.EnergyDashboard.route) },
                 onDeleteBulbs = viewModel::deleteBulbs,
                 onToggleBulb = viewModel::toggleBulb,
                 onBrightnessChange = viewModel::updateBrightness,
