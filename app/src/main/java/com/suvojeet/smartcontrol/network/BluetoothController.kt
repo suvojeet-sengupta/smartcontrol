@@ -24,11 +24,19 @@ class BluetoothController(context: Context) {
         @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val device = result.device
-            val name = device.name ?: "Unknown Device"
+            val name = device.name ?: result.scanRecord?.deviceName ?: "Unknown Device"
             
-            // Filter for Wiz/Wipro devices if possible, or just return all for now
-            // WiZ lights often advertise as "WiZ Config", "Wiz Light", or similar
-            if (name.contains("WiZ", ignoreCase = true) || name.contains("Wipro", ignoreCase = true)) {
+            Log.d("BluetoothController", "Scanned: $name - ${device.address}")
+            
+            // Broadened filter to catch more potential smart lights
+            // Wipro lights might advertise as "Wipro", "WiZ", "Smart Light", etc.
+            if (name.contains("WiZ", ignoreCase = true) || 
+                name.contains("Wipro", ignoreCase = true) ||
+                name.contains("Smart", ignoreCase = true) ||
+                name.contains("Light", ignoreCase = true) ||
+                name.contains("Bulb", ignoreCase = true) ||
+                name.contains("LED", ignoreCase = true)) {
+                
                 val discovered = DiscoveredBulb(
                     ipAddress = device.address, // Use MAC as IP for BLE devices temporarily
                     macAddress = device.address,
