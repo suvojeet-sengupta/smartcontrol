@@ -13,7 +13,8 @@ data class WizBulb(
     val sceneMode: String? = null, // null = manual, or scene name like "fireplace", "sunset", etc.
     val isAvailable: Boolean = true,
     val macAddress: String = "",
-    val connectionType: ConnectionType = ConnectionType.WIFI
+    val connectionType: ConnectionType = ConnectionType.WIFI,
+    val wattage: Float = 9f // Default 9W, can be customized per bulb
 ) {
     fun getComposeColor(): Color {
         return Color(colorInt)

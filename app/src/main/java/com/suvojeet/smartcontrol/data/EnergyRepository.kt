@@ -17,12 +17,17 @@ class EnergyRepository(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("energy_prefs", Context.MODE_PRIVATE)
     private val gson = Gson()
     private val KEY_USAGE_DATA = "usage_data"
+    private val KEY_BULB_USAGE = "bulb_usage_data"
 
-    // Map of Date (YYYY-MM-DD) -> Energy (Wh)
+    // Map of Date (YYYY-MM-DD) -> Energy (Wh) for total
     private var usageMap: MutableMap<String, Float> = mutableMapOf()
+    
+    // Map of BulbId -> (Date -> Energy) for per-bulb tracking
+    private var bulbUsageMap: MutableMap<String, MutableMap<String, Float>> = mutableMapOf()
 
     init {
         loadData()
+        loadBulbData()
     }
 
     private fun loadData() {
@@ -64,5 +69,64 @@ class EnergyRepository(context: Context) {
     fun getTotalUsageToday(): Float {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         return usageMap[today] ?: 0f
+    }
+    
+    // Per-Bulb Tracking Methods
+    private fun loadBulbData() {
+        val json = prefs.getString(KEY_BULB_USAGE, null)
+        if (json != null) {
+            val type = object : TypeToken<MutableMap<String, MutableMap<String, Float>>>() {}.type
+            bulbUsageMap = gson.fromJson(json, type)
+        }
+    }
+    
+    private fun saveBulbData() {
+        val json = gson.toJson(bulbUsageMap)
+        prefs.edit().putString(KEY_BULB_USAGE, json).apply()
+    }
+    
+    fun addBulbUsage(bulbId: String, energyWh: Float) {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        
+        if (!bulbUsageMap.containsKey(bulbId)) {
+            bulbUsageMap[bulbId] = mutableMapOf()
+        }
+        
+        val current = bulbUsageMap[bulbId]!![today] ?: 0f
+        bulbUsageMap[bulbId]!![today] = current + energyWh
+        saveBulbData()
+    }
+    
+    fun getBulbUsageToday(bulbId: String): Float {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        return bulbUsageMap[bulbId]?.get(today) ?: 0f
+    }
+    
+    fun getAllBulbsUsageToday(): Map<String, Float> {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val result = mutableMapOf<String, Float>()
+        
+        bulbUsageMap.forEach { (bulbId, dateMap) ->
+            result[bulbId] = dateMap[today] ?: 0f
+        }
+        
+        return result
+    }
+    
+    fun getBulbUsageHistory(bulbId: String, days: Int = 7): List<BulbEnergyUsage> {
+        val result = mutableListOf<BulbEnergyUsage>()
+        val calendar = java.util.Calendar.getInstance()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        
+        val bulbData = bulbUsageMap[bulbId] ?: return emptyList()
+        
+        for (i in 0 until days) {
+            val dateStr = dateFormat.format(calendar.time)
+            val energy = bulbData[dateStr] ?: 0f
+            result.add(BulbEnergyUsage(bulbId, "", dateStr, energy, 0f))
+            calendar.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        }
+        
+        return result.reversed()
     }
 }
