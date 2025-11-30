@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lightbulb
@@ -73,29 +74,6 @@ fun BulbListScreen(
                             fontWeight = FontWeight.Bold
                         )
                     }
-                },
-                navigationIcon = {
-                    if (isSelectionMode) {
-                        IconButton(onClick = { selectedBulbIds = emptySet() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close Selection", tint = Color.White)
-                        }
-                    }
-                },
-                actions = {
-                    if (isSelectionMode) {
-                        IconButton(onClick = { showDeleteConfirmation = true }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Selected", tint = Color.White)
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0A0A0A),
-                    titleContentColor = Color.White,
-                    actionIconContentColor = Color.White
-                )
-            )
-        },
-        floatingActionButton = {
             if (!isSelectionMode) {
                 FloatingActionButton(
                     onClick = { 

@@ -13,53 +13,6 @@ sealed class Screen(val route: String) {
     object BulbList : Screen("bulb_list")
     object Setup : Screen("setup")
     object BulbDetail : Screen("bulb_detail/{bulbId}") {
-        fun createRoute(bulbId: String) = "bulb_detail/$bulbId"
-    }
-    object CreateGroup : Screen("create_group")
-    object GroupDetail : Screen("group_detail/{groupId}") {
-        fun createRoute(groupId: String) = "group_detail/$groupId"
-    }
-}
-
-@Composable
-fun SmartControlNavigation(viewModel: HomeViewModel = viewModel()) {
-    val navController = rememberNavController()
-
-    NavHost(
-        navController = navController,
-        startDestination = Screen.BulbList.route
-    ) {
-        composable(Screen.BulbList.route) {
-            BulbListScreen(
-                bulbs = viewModel.bulbs,
-                groups = viewModel.groups,
-                onNavigateToSetup = { navController.navigate(Screen.Setup.route) },
-                onNavigateToCreateGroup = { navController.navigate(Screen.CreateGroup.route) },
-                onDeleteBulbs = viewModel::deleteBulbs,
-                onToggleBulb = viewModel::toggleBulb,
-                onBrightnessChange = viewModel::updateBrightness,
-                onNavigateToDetail = { bulbId ->
-                    navController.navigate(Screen.BulbDetail.createRoute(bulbId))
-                },
-                onNavigateToGroupDetail = { groupId ->
-                    navController.navigate(Screen.GroupDetail.createRoute(groupId))
-                },
-                onToggleGroup = viewModel::toggleGroup
-            )
-        }
-
-        composable(Screen.Setup.route) {
-            SetupScreen(
-                onNavigateBack = { 
-                    viewModel.resetDiscovery()
-                    navController.popBackStack() 
-                },
-                onAddBulb = viewModel::addBulb,
-                discoveryState = viewModel.discoveryState,
-                discoveredBulbs = viewModel.discoveredBulbs,
-                onStartDiscovery = viewModel::startDiscovery,
-                onAddDiscoveredBulb = viewModel::addDiscoveredBulb,
-                onAddAllDiscovered = viewModel::addAllDiscoveredBulbs
             )
         }
 
