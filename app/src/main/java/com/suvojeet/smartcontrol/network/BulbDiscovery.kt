@@ -22,9 +22,8 @@ data class DiscoveredBulb(
 )
 
 object BulbDiscovery {
-    private const val WIZ_PORT = 38899
-    private const val DISCOVERY_TIMEOUT = 5000L // 5 seconds
     private const val TAG = "BulbDiscovery"
+    private val gson = Gson()
 
     /**
      * Discover WiZ bulbs on the network using UDP broadcast
@@ -40,7 +39,7 @@ object BulbDiscovery {
                 
                 // If broadcast didn't find anything, fall back to IP scanning
                 if (discoveredBulbs.isEmpty()) {
-                    Log.d(TAG, "Broadcast found nothing, trying IP scan...")
+                    Log.d(TAG, "Broadcast found nothing, trying batched IP scan...")
                     val scanResults = discoverViaIpScan(context)
                     discoveredBulbs.addAll(scanResults)
                 }
@@ -58,7 +57,7 @@ object BulbDiscovery {
      * Discover bulbs using UDP broadcast
      */
     private suspend fun discoverViaBroadcast(context: Context): List<DiscoveredBulb> {
-        return withTimeoutOrNull(DISCOVERY_TIMEOUT) {
+        return withTimeoutOrNull(WizConstants.DISCOVERY_TIMEOUT) {
             val discoveredBulbs = mutableListOf<DiscoveredBulb>()
             
             try {
@@ -74,22 +73,23 @@ object BulbDiscovery {
                     // Get broadcast address
                     val broadcastAddress = getBroadcastAddress(wifiManager)
                     
-                    // Send registration request (WiZ discovery command)
-                    val json = """{"method":"registration","params":{"phoneMac":"AAAAAAAAAAAA","register":false}}"""
+                    // Send registration request using type-safe data class 🛡️
+                    val request = WizRequestBuilder.registrationRequest()
+                    val json = gson.toJson(request)
                     val sendData = json.toByteArray()
                     val sendPacket = DatagramPacket(
                         sendData, 
                         sendData.size, 
                         InetAddress.getByName(broadcastAddress), 
-                        WIZ_PORT
+                        WizConstants.WIZ_PORT
                     )
                     
-                    Log.d(TAG, "Sending broadcast to $broadcastAddress:$WIZ_PORT")
+                    Log.d(TAG, "Sending broadcast to $broadcastAddress:${WizConstants.WIZ_PORT}")
                     socket.send(sendPacket)
                     
                     // Listen for responses
                     val startTime = System.currentTimeMillis()
-                    while (System.currentTimeMillis() - startTime < 3000) {
+                    while (System.currentTimeMillis() - startTime < WizConstants.BROADCAST_LISTEN_DURATION) {
                         try {
                             val receiveData = ByteArray(1024)
                             val receivePacket = DatagramPacket(receiveData, receiveData.size)
@@ -151,18 +151,21 @@ object BulbDiscovery {
                 
                 // Get subnet (e.g., "192.168.1")
                 val subnet = ipString.substringBeforeLast(".")
-                Log.d(TAG, "Scanning subnet: $subnet.*")
+                Log.d(TAG, "Scanning subnet: $subnet.* in batches of ${WizConstants.IP_SCAN_BATCH_SIZE}")
                 
-                // Scan IPs concurrently in batches
-                val jobs = (1..254).map { i ->
-                    async {
-                        val testIp = "$subnet.$i"
-                        probeBulbAtIp(testIp)
+                // Scan IPs in batches to avoid network spam! 🚦
+                // Instead of 254 simultaneous requests, we do 50 at a time
+                (1..254).chunked(WizConstants.IP_SCAN_BATCH_SIZE).forEach { batch ->
+                    val jobs = batch.map { i ->
+                        async {
+                            val testIp = "$subnet.$i"
+                            probeBulbAtIp(testIp)
+                        }
                     }
+                    val results = jobs.awaitAll()
+                    discoveredBulbs.addAll(results.filterNotNull())
+                    Log.d(TAG, "Batch complete: found ${results.filterNotNull().size} bulbs")
                 }
-                
-                val results = jobs.awaitAll()
-                discoveredBulbs.addAll(results.filterNotNull())
                 
             } catch (e: Exception) {
                 Log.e(TAG, "IP scan error: ${e.message}", e)
@@ -176,15 +179,17 @@ object BulbDiscovery {
      * Probe a specific IP to check if it's a WiZ bulb
      */
     private suspend fun probeBulbAtIp(ip: String): DiscoveredBulb? {
-        return withTimeoutOrNull(500L) {
+        return withTimeoutOrNull(WizConstants.PROBE_TIMEOUT) {
             try {
                 val socket = DatagramSocket()
-                socket.soTimeout = 500
+                socket.soTimeout = WizConstants.PROBE_TIMEOUT.toInt()
                 
-                val json = """{"method":"getPilot","params":{}}"""
+                // Use type-safe getPilot request 🛡️
+                val request = WizRequestBuilder.getPilotRequest()
+                val json = gson.toJson(request)
                 val sendData = json.toByteArray()
                 val address = InetAddress.getByName(ip)
-                val sendPacket = DatagramPacket(sendData, sendData.size, address, WIZ_PORT)
+                val sendPacket = DatagramPacket(sendData, sendData.size, address, WizConstants.WIZ_PORT)
                 
                 socket.send(sendPacket)
                 

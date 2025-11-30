@@ -29,6 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.suvojeet.smartcontrol.WizBulb
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -206,6 +209,9 @@ fun BulbCard(
 ) {
     val isAvailable = bulb.isAvailable
     
+    // Haptic feedback for that physical dimmer feel! 📳
+    val haptic = LocalHapticFeedback.current
+    
     // Gesture handling for brightness
     var accumulatedDrag by remember { mutableStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
@@ -232,6 +238,8 @@ fun BulbCard(
                         onDragStart = { 
                             isDragging = true 
                             dragBrightness = bulb.brightness
+                            // Haptic feedback on drag start 👌
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         },
                         onDragEnd = { 
                             isDragging = false 
@@ -258,7 +266,9 @@ fun BulbCard(
                             
                             if (newBrightness != currentBase) {
                                 dragBrightness = newBrightness
-                                accumulatedDrag = 0f 
+                                accumulatedDrag = 0f
+                                // Haptic feedback on brightness change ✨
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             }
                         }
                     }
