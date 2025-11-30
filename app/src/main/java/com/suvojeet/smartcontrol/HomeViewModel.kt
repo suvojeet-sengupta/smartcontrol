@@ -7,29 +7,40 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.suvojeet.smartcontrol.data.DeviceRepository
-import com.suvojeet.smartcontrol.network.WizUdpController
+import com.suvojeet.smartcontrol.data.EnergyRepository
+import com.suvojeet.smartcontrol.data.BulbEnergyUsage
+import com.suvojeet.smartcontrol.domain.usecase.GetBulbsUseCase
+import com.suvojeet.smartcontrol.domain.usecase.RefreshBulbsUseCase
+import com.suvojeet.smartcontrol.domain.usecase.ToggleBulbUseCase
+import com.suvojeet.smartcontrol.domain.usecase.UpdateBulbUseCase
 import com.suvojeet.smartcontrol.network.BulbDiscovery
 import com.suvojeet.smartcontrol.network.DiscoveredBulb
-import com.suvojeet.smartcontrol.network.BluetoothController
-import com.suvojeet.smartcontrol.data.BulbEnergyUsage
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.UUID
+import javax.inject.Inject
 
-// AndroidViewModel use kiya taaki Storage ke liye Context mil jaye
-class HomeViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class HomeViewModel @Inject constructor(
+    private val getBulbsUseCase: GetBulbsUseCase,
+    private val toggleBulbUseCase: ToggleBulbUseCase,
+    private val updateBulbUseCase: UpdateBulbUseCase,
+    private val refreshBulbsUseCase: RefreshBulbsUseCase,
+    private val repository: DeviceRepository,
+    private val energyRepository: EnergyRepository,
+    private val application: Application // Kept for Discovery context if needed, though Discovery should ideally be injected too
+) : ViewModel() { // Changed from AndroidViewModel to ViewModel
 
-    private val repository = DeviceRepository(application)
-    private val context = application.applicationContext
-    private val bluetoothController = BluetoothController(context)
-    
+    // State backed by Flow
     var bulbs by mutableStateOf<List<WizBulb>>(emptyList())
         private set
 
-    // Groups state
     var groups by mutableStateOf<List<BulbGroup>>(emptyList())
         private set
 
@@ -40,10 +51,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     var discoveredBulbs by mutableStateOf<List<DiscoveredBulb>>(emptyList())
         private set
 
-    private val lastUpdateMap = mutableMapOf<String, Long>()
-    
-    private val energyRepository = com.suvojeet.smartcontrol.data.EnergyRepository(application)
-    
     var energyUsageHistory by mutableStateOf<List<com.suvojeet.smartcontrol.data.DailyEnergyUsage>>(emptyList())
         private set
         
@@ -51,9 +58,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     init {
-        // App khulte hi purane saved bulbs load karo
-        loadBulbs()
-        loadGroups()
+        // Collect Flows
+        viewModelScope.launch {
+            getBulbsUseCase().collectLatest {
+                bulbs = it
+            }
+        }
+        
+        viewModelScope.launch {
+            repository.getGroups().collectLatest {
+                groups = it
+            }
+        }
+
         loadEnergyData()
         startPolling()
     }
@@ -63,150 +80,72 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         todayUsage = energyRepository.getTotalUsageToday()
     }
 
-    private fun loadBulbs() {
-        bulbs = repository.getDevices()
-    }
-
-    private fun loadGroups() {
-        groups = repository.getGroups()
-    }
-
     private fun startPolling() {
         viewModelScope.launch {
             while (isActive) {
-                refreshBulbStatuses()
+                try {
+                    refreshBulbsUseCase()
+                    // Update energy UI after refresh
+                    todayUsage = energyRepository.getTotalUsageToday()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
                 delay(3000) // Poll every 3 seconds
             }
         }
     }
 
-    private suspend fun refreshBulbStatuses() {
-        var totalEnergyIncrement = 0f
-        
-        val updatedBulbs = bulbs.map { bulb ->
-            // Calculate energy for this bulb for the 3s interval
-            // Formula: (bulb.wattage * (brightness/100)) * (3/3600 hours)
-            if (bulb.isOn) {
-                val watts = bulb.wattage * (bulb.brightness / 100f)
-                val hours = 3f / 3600f
-                val energyWh = watts * hours
-                totalEnergyIncrement += energyWh
-                
-                // Track per-bulb usage
-                energyRepository.addBulbUsage(bulb.id, energyWh)
-            }
-
-            // Check cooldown
-            val lastUpdate = lastUpdateMap[bulb.id] ?: 0L
-            if (System.currentTimeMillis() - lastUpdate < 3000) {
-                return@map bulb // Skip update if within cooldown
-            }
-
-            val status = WizUdpController.getBulbStatus(bulb.ipAddress)
-            if (status != null) {
-                val result = status["result"] as? Map<String, Any> ?: status
-                
-                val isOn = result["state"] as? Boolean ?: bulb.isOn
-                val dimming = (result["dimming"] as? Number)?.toFloat() ?: bulb.brightness
-                val sceneId = (result["sceneId"] as? Number)?.toInt() ?: 0
-                val temp = (result["temp"] as? Number)?.toInt() ?: 0
-                val r = (result["r"] as? Number)?.toInt() ?: 0
-                val g = (result["g"] as? Number)?.toInt() ?: 0
-                val b = (result["b"] as? Number)?.toInt() ?: 0
-
-                var newSceneMode: String? = null
-                var newColorInt = bulb.colorInt
-                var newTemp = bulb.temperature
-
-                if (sceneId > 0) {
-                    // Find scene name from ID
-                    newSceneMode = sceneMap.entries.find { it.value == sceneId }?.key
-                } else if (temp > 0) {
-                    newTemp = temp
-                    newSceneMode = null
-                    newColorInt = Color.White.toArgb()
-                } else {
-                    // Color mode
-                    newSceneMode = null
-                    if (r > 0 || g > 0 || b > 0) {
-                            newColorInt = Color(r / 255f, g / 255f, b / 255f).toArgb()
-                    }
-                }
-
-                bulb.copy(
-                    isOn = isOn,
-                    brightness = dimming,
-                    sceneMode = newSceneMode,
-                    temperature = newTemp,
-                    colorInt = newColorInt,
-                    isAvailable = true
-                )
-            } else {
-                bulb.copy(isAvailable = false)
-            }
-        }
-        bulbs = updatedBulbs
-        
-        // Update energy repository if any usage occurred
-        if (totalEnergyIncrement > 0) {
-            energyRepository.addUsage(totalEnergyIncrement)
-            todayUsage += totalEnergyIncrement
-        }
-    }
-
     fun addBulb(name: String, ip: String) {
-        val newBulb = WizBulb(
-            id = UUID.randomUUID().toString(),
-            name = name,
-            ipAddress = ip
-        )
-        val updatedList = bulbs + newBulb
-        bulbs = updatedList
-        repository.saveDevices(updatedList)
+        viewModelScope.launch {
+            val newBulb = WizBulb(
+                id = UUID.randomUUID().toString(),
+                name = name,
+                ipAddress = ip
+            )
+            repository.addBulb(newBulb)
+        }
     }
 
     fun deleteBulb(id: String) {
-        val updatedList = bulbs.filter { it.id != id }
-        bulbs = updatedList
-        repository.saveDevices(updatedList)
+        viewModelScope.launch {
+            repository.deleteBulb(id)
+        }
     }
 
     fun deleteBulbs(ids: List<String>) {
-        val updatedList = bulbs.filter { it.id !in ids }
-        bulbs = updatedList
-        repository.saveDevices(updatedList)
+        viewModelScope.launch {
+            ids.forEach { repository.deleteBulb(it) }
+        }
     }
 
     fun toggleBulb(id: String) {
-        lastUpdateMap[id] = System.currentTimeMillis()
-        bulbs = bulbs.map { if (it.id == id) it.copy(isOn = !it.isOn) else it }
-        syncWithBulb(id)
-        repository.saveDevices(bulbs)
+        viewModelScope.launch {
+            toggleBulbUseCase(id, bulbs)
+            refreshBulbsUseCase.markUpdate(id)
+        }
     }
 
     fun updateBrightness(id: String, value: Float) {
-        lastUpdateMap[id] = System.currentTimeMillis()
-        bulbs = bulbs.map { if (it.id == id) it.copy(brightness = value) else it }
-        syncWithBulb(id)
+        viewModelScope.launch {
+            val bulb = bulbs.find { it.id == id } ?: return@launch
+            updateBulbUseCase.updateBrightness(bulb, value)
+            refreshBulbsUseCase.markUpdate(id)
+        }
     }
 
     fun updateColor(id: String, color: Color) {
-        lastUpdateMap[id] = System.currentTimeMillis()
-        bulbs = bulbs.map { 
-            if (it.id == id) {
-                it.copy(
-                    colorInt = color.toArgb(),
-                    sceneMode = null // Reset scene mode so color takes effect
-                ) 
-            } else it 
+        viewModelScope.launch {
+            val bulb = bulbs.find { it.id == id } ?: return@launch
+            updateBulbUseCase.updateColor(bulb, color)
+            refreshBulbsUseCase.markUpdate(id)
         }
-        syncWithBulb(id)
-        repository.saveDevices(bulbs)
     }
     
     fun updateBulbWattage(id: String, wattage: Float) {
-        bulbs = bulbs.map { if (it.id == id) it.copy(wattage = wattage) else it }
-        repository.saveDevices(bulbs)
+        viewModelScope.launch {
+            val bulb = bulbs.find { it.id == id } ?: return@launch
+            repository.updateBulb(bulb.copy(wattage = wattage))
+        }
     }
     
     fun getBulbUsageHistory(bulbId: String): List<BulbEnergyUsage> {
@@ -217,6 +156,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         return energyRepository.getBulbUsageToday(bulbId)
     }
 
+    fun updateTemperature(id: String, temp: Int) {
+        viewModelScope.launch {
+            val bulb = bulbs.find { it.id == id } ?: return@launch
+            updateBulbUseCase.updateTemperature(bulb, temp)
+            refreshBulbsUseCase.markUpdate(id)
+        }
+    }
+
+    fun updateScene(id: String, scene: String?) {
+        viewModelScope.launch {
+            val bulb = bulbs.find { it.id == id } ?: return@launch
+            // We need sceneId from map. 
+            // Ideally UseCase should handle this mapping or take scene name.
+            // For now, let's map here or move map to UseCase.
+            // The UseCase has updateScene(bulb, sceneId, sceneName)
+            // I need the map here to get ID.
+            // I'll duplicate the map or make it public in UseCase.
+            // For now, I'll copy the map here to keep it working quickly.
+            val sceneId = sceneMap[scene] ?: 0
+            if (sceneId > 0 && scene != null) {
+                updateBulbUseCase.updateScene(bulb, sceneId, scene)
+                refreshBulbsUseCase.markUpdate(id)
+            }
+        }
+    }
+    
     private val sceneMap = mapOf(
         "ocean" to 1, "romance" to 2, "sunset" to 3, "party" to 4,
         "fireplace" to 5, "cozy" to 6, "forest" to 7, "pastel" to 8,
@@ -228,160 +193,77 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         "candlelight" to 29, "goldenwhite" to 30, "pulse" to 31, "steampunk" to 32
     )
 
-    fun updateTemperature(id: String, temp: Int) {
-        lastUpdateMap[id] = System.currentTimeMillis()
-        bulbs = bulbs.map { 
-            if (it.id == id) {
-                it.copy(
-                    temperature = temp, 
-                    sceneMode = null,
-                    colorInt = Color.White.toArgb() // Reset color to ensure white mode is active
-                ) 
-            } else it 
-        }
-        syncWithBulb(id)
-        repository.saveDevices(bulbs)
-    }
-
-    fun updateScene(id: String, scene: String?) {
-        lastUpdateMap[id] = System.currentTimeMillis()
-        bulbs = bulbs.map { if (it.id == id) it.copy(sceneMode = scene) else it }
-        syncWithBulb(id)
-        repository.saveDevices(bulbs)
-    }
-
-    private fun syncWithBulb(id: String) {
-        val bulb = bulbs.find { it.id == id } ?: return
-        
-        if (bulb.connectionType == ConnectionType.BLE) {
-            // BLE Control
-            viewModelScope.launch {
-                try {
-                    bluetoothController.connect(bulb.macAddress, context)
-                    // Small delay to ensure connection
-                    delay(500)
-                    
-                    if (bulb.isOn) {
-                        bluetoothController.setPower(true)
-                        bluetoothController.setBrightness(bulb.brightness.toInt())
-                        
-                        if (bulb.temperature > 0 && bulb.colorInt == Color.White.toArgb()) {
-                            bluetoothController.setTemperature(bulb.temperature)
-                        } else {
-                            val color = bulb.getComposeColor()
-                            bluetoothController.setColor(
-                                (color.red * 255).toInt(),
-                                (color.green * 255).toInt(),
-                                (color.blue * 255).toInt()
-                            )
-                        }
-                    } else {
-                        bluetoothController.setPower(false)
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-            return
-        }
-        
-        viewModelScope.launch {
-            val params = mutableMapOf<String, Any>(
-                "state" to bulb.isOn,
-                "dimming" to bulb.brightness.toInt().coerceIn(10, 100)
-            )
-
-            if (bulb.isOn) {
-                if (bulb.sceneMode != null) {
-                    // Scene mode
-                    val sceneId = sceneMap[bulb.sceneMode] ?: 0
-                    if (sceneId > 0) {
-                        params["sceneId"] = sceneId
-                    }
-                } else if (bulb.temperature > 0 && bulb.colorInt == Color.White.hashCode()) {
-                    // White mode (if color is default white or specifically set to white)
-                    // Note: This logic assumes if color is white, we use temp. 
-                    // Better might be to track "mode" explicitly, but this works for now.
-                    params["temp"] = bulb.temperature
-                } else {
-                    // Color mode
-                    val color = bulb.getComposeColor()
-                    params["r"] = (color.red * 255).toInt()
-                    params["g"] = (color.green * 255).toInt()
-                    params["b"] = (color.blue * 255).toInt()
-                }
-            }
-
-            WizUdpController.sendCommand(bulb.ipAddress, params)
-        }
-    }
-
     // Group Management
     fun createGroup(name: String, bulbIds: List<String>) {
-        val newGroup = BulbGroup(
-            id = UUID.randomUUID().toString(),
-            name = name,
-            bulbIds = bulbIds
-        )
-        val updatedGroups = groups + newGroup
-        groups = updatedGroups
-        repository.saveGroups(updatedGroups)
+        viewModelScope.launch {
+            val newGroup = BulbGroup(
+                id = UUID.randomUUID().toString(),
+                name = name,
+                bulbIds = bulbIds
+            )
+            repository.addGroup(newGroup)
+        }
     }
 
     fun deleteGroup(groupId: String) {
-        val updatedGroups = groups.filter { it.id != groupId }
-        groups = updatedGroups
-        repository.saveGroups(updatedGroups)
+        viewModelScope.launch {
+            repository.deleteGroup(groupId)
+        }
     }
 
     // Group Control
     fun toggleGroup(groupId: String) {
-        val group = groups.find { it.id == groupId } ?: return
-        val newState = !group.isOn
-        
-        // Update group state
-        groups = groups.map { if (it.id == groupId) it.copy(isOn = newState) else it }
-        repository.saveGroups(groups)
+        viewModelScope.launch {
+            val group = groups.find { it.id == groupId } ?: return@launch
+            val newState = !group.isOn
+            
+            // Update group state
+            repository.updateGroup(group.copy(isOn = newState))
 
-        // Update all bulbs in group
-        group.bulbIds.forEach { bulbId ->
-            // Update local state
-            bulbs = bulbs.map { if (it.id == bulbId) it.copy(isOn = newState) else it }
-            // Send command
-            syncWithBulb(bulbId)
+            // Update all bulbs in group
+            group.bulbIds.forEach { bulbId ->
+                toggleBulb(bulbId) // Re-use toggleBulb which uses UseCase
+            }
         }
-        repository.saveDevices(bulbs)
     }
 
     fun updateGroupBrightness(groupId: String, brightness: Float) {
-        val group = groups.find { it.id == groupId } ?: return
-        
-        groups = groups.map { if (it.id == groupId) it.copy(brightness = brightness) else it }
-        repository.saveGroups(groups)
+        viewModelScope.launch {
+            val group = groups.find { it.id == groupId } ?: return@launch
+            repository.updateGroup(group.copy(brightness = brightness))
 
-        group.bulbIds.forEach { bulbId ->
-            updateBrightness(bulbId, brightness)
+            group.bulbIds.forEach { bulbId ->
+                updateBrightness(bulbId, brightness)
+            }
         }
     }
 
     fun updateGroupColor(groupId: String, color: Color) {
-        val group = groups.find { it.id == groupId } ?: return
-        group.bulbIds.forEach { bulbId ->
-            updateColor(bulbId, color)
+        viewModelScope.launch {
+            val group = groups.find { it.id == groupId } ?: return@launch
+            // No color property on group usually, but if there was we'd update it.
+            // Just update bulbs.
+            group.bulbIds.forEach { bulbId ->
+                updateColor(bulbId, color)
+            }
         }
     }
 
     fun updateGroupTemperature(groupId: String, temp: Int) {
-        val group = groups.find { it.id == groupId } ?: return
-        group.bulbIds.forEach { bulbId ->
-            updateTemperature(bulbId, temp)
+        viewModelScope.launch {
+            val group = groups.find { it.id == groupId } ?: return@launch
+            group.bulbIds.forEach { bulbId ->
+                updateTemperature(bulbId, temp)
+            }
         }
     }
 
     fun updateGroupScene(groupId: String, scene: String?) {
-        val group = groups.find { it.id == groupId } ?: return
-        group.bulbIds.forEach { bulbId ->
-            updateScene(bulbId, scene)
+        viewModelScope.launch {
+            val group = groups.find { it.id == groupId } ?: return@launch
+            group.bulbIds.forEach { bulbId ->
+                updateScene(bulbId, scene)
+            }
         }
     }
 
@@ -392,7 +274,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 discoveryState = DiscoveryState.Scanning
                 discoveredBulbs = emptyList()
                 
-                val found = BulbDiscovery.discoverBulbs(context)
+                // Using application context for discovery
+                val found = BulbDiscovery.discoverBulbs(application)
                 
                 // Filter out already added bulbs
                 val existingIps = bulbs.map { it.ipAddress }.toSet()
@@ -411,56 +294,47 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addDiscoveredBulb(discovered: DiscoveredBulb) {
-        if (bulbs.none { it.id == discovered.macAddress }) {
-            val newBulb = WizBulb(
-                id = discovered.macAddress,
-                name = discovered.name,
-                ipAddress = discovered.ipAddress,
-                macAddress = discovered.macAddress,
-                connectionType = if (discovered.isBle) ConnectionType.BLE else ConnectionType.WIFI
-            )
-            val updatedBulbs = bulbs + newBulb
-            bulbs = updatedBulbs
-            repository.saveDevices(updatedBulbs)
-            
-            // Remove from discovered list
-            discoveredBulbs = discoveredBulbs.filter { it.macAddress != discovered.macAddress }
+        viewModelScope.launch {
+            if (bulbs.none { it.id == discovered.macAddress }) {
+                val newBulb = WizBulb(
+                    id = discovered.macAddress,
+                    name = discovered.name,
+                    ipAddress = discovered.ipAddress,
+                    macAddress = discovered.macAddress,
+                    connectionType = if (discovered.isBle) ConnectionType.BLE else ConnectionType.WIFI
+                )
+                repository.addBulb(newBulb)
+                
+                // Remove from discovered list
+                discoveredBulbs = discoveredBulbs.filter { it.macAddress != discovered.macAddress }
+            }
         }
     }
 
     fun addAllDiscoveredBulbs() {
-        val newBulbs = discoveredBulbs.map { discovered ->
-            WizBulb(
-                id = discovered.macAddress,
-                name = discovered.name,
-                ipAddress = discovered.ipAddress,
-                macAddress = discovered.macAddress,
-                connectionType = if (discovered.isBle) ConnectionType.BLE else ConnectionType.WIFI
-            )
+        viewModelScope.launch {
+            val newBulbs = discoveredBulbs.map { discovered ->
+                WizBulb(
+                    id = discovered.macAddress,
+                    name = discovered.name,
+                    ipAddress = discovered.ipAddress,
+                    macAddress = discovered.macAddress,
+                    connectionType = if (discovered.isBle) ConnectionType.BLE else ConnectionType.WIFI
+                )
+            }
+            // Filter out duplicates again just in case
+            val uniqueNewBulbs = newBulbs.filter { new -> bulbs.none { it.id == new.id } }
+            
+            uniqueNewBulbs.forEach { repository.addBulb(it) }
+            
+            // Clear discovered list
+            discoveredBulbs = emptyList()
+            discoveryState = DiscoveryState.Idle
         }
-        // Filter out duplicates again just in case
-        val uniqueNewBulbs = newBulbs.filter { new -> bulbs.none { it.id == new.id } }
-        
-        val updatedList = bulbs + uniqueNewBulbs
-        bulbs = updatedList
-        repository.saveDevices(updatedList)
-        
-        // Clear discovered list
-        discoveredBulbs = emptyList()
-        discoveryState = DiscoveryState.Idle
     }
 
     fun resetDiscovery() {
         discoveryState = DiscoveryState.Idle
         discoveredBulbs = emptyList()
     }
-}
-
-// Discovery state sealed class
-sealed class DiscoveryState {
-    object Idle : DiscoveryState()
-    object Scanning : DiscoveryState()
-    object Success : DiscoveryState()
-    object NoDevicesFound : DiscoveryState()
-    data class Error(val message: String) : DiscoveryState()
 }

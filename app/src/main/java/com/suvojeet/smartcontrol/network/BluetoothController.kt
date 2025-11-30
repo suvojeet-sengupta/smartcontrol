@@ -10,7 +10,12 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 
-class BluetoothController(context: Context) {
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class BluetoothController @Inject constructor(@ApplicationContext private val context: Context) {
 
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val adapter: BluetoothAdapter? = bluetoothManager.adapter
@@ -106,7 +111,7 @@ class BluetoothController(context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    fun connect(address: String, context: Context) {
+    fun connect(address: String) {
         if (activeDeviceAddress == address && bluetoothGatt != null) return
         
         disconnect() // Disconnect existing

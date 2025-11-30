@@ -13,7 +13,12 @@ data class DailyEnergyUsage(
     val energyWh: Float
 )
 
-class EnergyRepository(context: Context) {
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class EnergyRepository @Inject constructor(@ApplicationContext context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("energy_prefs", Context.MODE_PRIVATE)
     private val gson = Gson()
     private val KEY_USAGE_DATA = "usage_data"

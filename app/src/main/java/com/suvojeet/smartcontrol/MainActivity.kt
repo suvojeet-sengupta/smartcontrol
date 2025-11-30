@@ -6,7 +6,9 @@ import androidx.activity.compose.setContent
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.suvojeet.smartcontrol.ui.SmartControlNavigation
 import com.suvojeet.smartcontrol.ui.theme.SmartControlTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
