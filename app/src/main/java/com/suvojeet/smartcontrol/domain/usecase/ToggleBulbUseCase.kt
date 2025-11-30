@@ -24,7 +24,8 @@ class ToggleBulbUseCase @Inject constructor(
         "truecolors" to 17, "tvtime" to 18, "plantgrowth" to 19, "spring" to 20,
         "summer" to 21, "fall" to 22, "deepdive" to 23, "jungle" to 24,
         "mojito" to 25, "club" to 26, "christmas" to 27, "halloween" to 28,
-        "candlelight" to 29, "goldenwhite" to 30, "pulse" to 31, "steampunk" to 32
+        "candlelight" to 29, "goldenwhite" to 30, "pulse" to 31, "steampunk" to 32,
+        "diwali" to 33
     )
 
     suspend operator fun invoke(bulbId: String, currentBulbs: List<com.suvojeet.smartcontrol.WizBulb>) {
