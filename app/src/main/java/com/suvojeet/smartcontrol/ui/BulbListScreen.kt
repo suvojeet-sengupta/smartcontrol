@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,34 +17,40 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.ui.hapticfeedback.HapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import com.suvojeet.smartcontrol.BulbGroup
 import com.suvojeet.smartcontrol.WizBulb
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BulbListScreen(
     bulbs: List<WizBulb>,
+    groups: List<BulbGroup> = emptyList(),
     onNavigateToSetup: () -> Unit,
+    onNavigateToCreateGroup: () -> Unit,
     onDeleteBulbs: (List<String>) -> Unit,
     onToggleBulb: (String) -> Unit,
     onBrightnessChange: (String, Float) -> Unit,
-    onNavigateToDetail: (String) -> Unit
+    onNavigateToDetail: (String) -> Unit,
+    onNavigateToGroupDetail: (String) -> Unit,
+    onToggleGroup: (String) -> Unit
 ) {
+    var selectedTab by remember { mutableStateOf(0) } // 0 = Bulbs, 1 = Groups
+    val tabs = listOf("Bulbs", "Groups")
+    
     var selectedBulbIds by remember { mutableStateOf(setOf<String>()) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     val isSelectionMode = selectedBulbIds.isNotEmpty()
@@ -91,82 +98,145 @@ fun BulbListScreen(
         floatingActionButton = {
             if (!isSelectionMode) {
                 FloatingActionButton(
-                    onClick = onNavigateToSetup,
+                    onClick = { 
+                        if (selectedTab == 0) onNavigateToSetup() else onNavigateToCreateGroup()
+                    },
                     containerColor = Color(0xFF4CAF50),
                     contentColor = Color.White
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Bulb")
+                    Icon(Icons.Default.Add, contentDescription = "Add")
                 }
             }
         }
     ) { padding ->
-        
-        if (bulbs.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+        ) {
+            // Tabs
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = Color(0xFF0A0A0A),
+                contentColor = Color.White,
+                indicator = { tabPositions ->
+                    if (selectedTab < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
+                },
+                divider = {}
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.Lightbulb,
-                        contentDescription = null,
-                        tint = Color.Gray,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "No bulbs added yet",
-                        color = Color.Gray,
-                        fontSize = 18.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Tap + to add your first bulb",
-                        color = Color.DarkGray,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(bulbs, key = { it.id }) { bulb ->
-                    val isSelected = selectedBulbIds.contains(bulb.id)
-                    BulbCard(
-                        bulb = bulb,
-                        isSelectionMode = isSelectionMode,
-                        isSelected = isSelected,
-                        onToggle = { onToggleBulb(bulb.id) },
-                        onBrightnessChange = { newBrightness -> onBrightnessChange(bulb.id, newBrightness) },
-                        onClick = {
-                            if (isSelectionMode) {
-                                if (isSelected) {
-                                    selectedBulbIds = selectedBulbIds - bulb.id
-                                } else {
-                                    selectedBulbIds = selectedBulbIds + bulb.id
-                                }
-                            } else {
-                                onNavigateToDetail(bulb.id)
-                            }
-                        },
-                        onLongClick = {
-                            if (!isSelectionMode) {
-                                selectedBulbIds = selectedBulbIds + bulb.id
-                            }
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { 
+                            Text(
+                                title,
+                                fontSize = 16.sp,
+                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                            ) 
                         }
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (selectedTab == 0) {
+                // Bulbs List
+                if (bulbs.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Lightbulb,
+                                contentDescription = null,
+                                tint = Color.Gray,
+                                modifier = Modifier.size(64.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                "No bulbs added yet",
+                                color = Color.Gray,
+                                fontSize = 18.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Tap + to add your first bulb",
+                                color = Color.DarkGray,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        items(bulbs, key = { it.id }) { bulb ->
+                            val isSelected = selectedBulbIds.contains(bulb.id)
+                            BulbCard(
+                                bulb = bulb,
+                                isSelectionMode = isSelectionMode,
+                                isSelected = isSelected,
+                                onToggle = { onToggleBulb(bulb.id) },
+                                onBrightnessChange = { newBrightness -> onBrightnessChange(bulb.id, newBrightness) },
+                                onClick = {
+                                    if (isSelectionMode) {
+                                        if (isSelected) {
+                                            selectedBulbIds = selectedBulbIds - bulb.id
+                                        } else {
+                                            selectedBulbIds = selectedBulbIds + bulb.id
+                                        }
+                                    } else {
+                                        onNavigateToDetail(bulb.id)
+                                    }
+                                },
+                                onLongClick = {
+                                    if (!isSelectionMode) {
+                                        selectedBulbIds = selectedBulbIds + bulb.id
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Groups List
+                if (groups.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "No groups created.\nTap + to create one.",
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp)
+                    ) {
+                        items(groups) { group ->
+                            GroupCard(
+                                group = group,
+                                onToggle = { onToggleGroup(group.id) },
+                                onClick = { onNavigateToGroupDetail(group.id) }
+                            )
+                        }
+                    }
+                }
+            }
         }
-
-
 
         if (showDeleteConfirmation) {
             AlertDialog(
@@ -192,6 +262,60 @@ fun BulbListScreen(
                     }
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun GroupCard(
+    group: BulbGroup,
+    onToggle: () -> Unit,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF1A1A1A)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    group.name,
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "${group.bulbIds.size} lights",
+                    color = Color.Gray,
+                    fontSize = 14.sp
+                )
+            }
+
+            IconButton(
+                onClick = onToggle,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (group.isOn) Color.White else Color(0xFF2A2A2A))
+            ) {
+                Icon(
+                    Icons.Default.PowerSettingsNew,
+                    contentDescription = "Power",
+                    tint = if (group.isOn) Color.Black else Color.Gray
+                )
+            }
         }
     }
 }
@@ -292,95 +416,57 @@ fun BulbCard(
                         .background(cyanColor)
                 )
                 
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                // Percentage Text
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Brightness",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "${displayBrightness.toInt()}%",
+                        "${displayBrightness.toInt()}%",
                         color = Color.White,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             } else {
-                // Idle State UI
-                
-                // Bottom Progress Bar
-                if (isAvailable && bulb.isOn) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth(fraction = displayBrightness / 100f)
-                            .height(6.dp)
-                            .background(cyanColor)
-                    )
-                }
-
+                // Normal State UI
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Icon
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                         if (isSelectionMode) {
-                            Icon(
-                                imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
-                                contentDescription = null,
-                                tint = if (isSelected) Color(0xFF4CAF50) else Color.Gray,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        } else {
-                             Icon(
-                                imageVector = Icons.Default.Lightbulb,
-                                contentDescription = null,
-                                tint = if (isAvailable && bulb.isOn) Color.White else Color.Gray,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
+                    Column {
+                        Text(
+                            bulb.name,
+                            color = if (isAvailable) Color.White else Color.Gray,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (isAvailable) bulb.ipAddress else "Offline",
+                            color = if (isAvailable) Color.Gray else Color.Red,
+                            fontSize = 14.sp
+                        )
                     }
 
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    // Name
-                    Text(
-                        text = bulb.name,
-                        color = if (isAvailable) Color.White else Color.Gray,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    // Switch
-                    if (!isSelectionMode) {
-                        Switch(
-                            checked = isAvailable && bulb.isOn,
-                            onCheckedChange = { onToggle() },
-                            enabled = isAvailable,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = cyanColor,
-                                checkedTrackColor = cyanColor.copy(alpha = 0.3f),
-                                uncheckedThumbColor = Color.Gray,
-                                uncheckedTrackColor = Color.DarkGray,
-                                uncheckedBorderColor = Color.Gray
+                    IconButton(
+                        onClick = onToggle,
+                        enabled = isAvailable,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (bulb.isOn) Color.White 
+                                else if (isAvailable) Color(0xFF2A2A2A) 
+                                else Color.Transparent
                             )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PowerSettingsNew,
+                            contentDescription = "Power",
+                            tint = if (bulb.isOn) Color.Black else Color.Gray
                         )
                     }
                 }
@@ -388,5 +474,3 @@ fun BulbCard(
         }
     }
 }
-
-

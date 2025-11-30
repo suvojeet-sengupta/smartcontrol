@@ -15,6 +15,10 @@ sealed class Screen(val route: String) {
     object BulbDetail : Screen("bulb_detail/{bulbId}") {
         fun createRoute(bulbId: String) = "bulb_detail/$bulbId"
     }
+    object CreateGroup : Screen("create_group")
+    object GroupDetail : Screen("group_detail/{groupId}") {
+        fun createRoute(groupId: String) = "group_detail/$groupId"
+    }
 }
 
 @Composable
@@ -28,13 +32,19 @@ fun SmartControlNavigation(viewModel: HomeViewModel = viewModel()) {
         composable(Screen.BulbList.route) {
             BulbListScreen(
                 bulbs = viewModel.bulbs,
+                groups = viewModel.groups,
                 onNavigateToSetup = { navController.navigate(Screen.Setup.route) },
+                onNavigateToCreateGroup = { navController.navigate(Screen.CreateGroup.route) },
                 onDeleteBulbs = viewModel::deleteBulbs,
                 onToggleBulb = viewModel::toggleBulb,
                 onBrightnessChange = viewModel::updateBrightness,
                 onNavigateToDetail = { bulbId ->
                     navController.navigate(Screen.BulbDetail.createRoute(bulbId))
-                }
+                },
+                onNavigateToGroupDetail = { groupId ->
+                    navController.navigate(Screen.GroupDetail.createRoute(groupId))
+                },
+                onToggleGroup = viewModel::toggleGroup
             )
         }
 
@@ -68,6 +78,32 @@ fun SmartControlNavigation(viewModel: HomeViewModel = viewModel()) {
                 onColorChange = { color -> viewModel.updateColor(bulbId, color) },
                 onTemperatureChange = { temp -> viewModel.updateTemperature(bulbId, temp) },
                 onSceneSelect = { scene -> viewModel.updateScene(bulbId, scene) }
+            )
+        }
+
+        composable(Screen.CreateGroup.route) {
+            CreateGroupScreen(
+                bulbs = viewModel.bulbs,
+                onNavigateBack = { navController.popBackStack() },
+                onCreateGroup = viewModel::createGroup
+            )
+        }
+
+        composable(
+            route = Screen.GroupDetail.route,
+            arguments = listOf(navArgument("groupId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val groupId = backStackEntry.arguments?.getString("groupId") ?: return@composable
+            val group = viewModel.groups.find { it.id == groupId } ?: return@composable
+
+            GroupDetailScreen(
+                group = group,
+                onNavigateBack = { navController.popBackStack() },
+                onToggleGroup = { viewModel.toggleGroup(groupId) },
+                onBrightnessChange = { value -> viewModel.updateGroupBrightness(groupId, value) },
+                onColorChange = { color -> viewModel.updateGroupColor(groupId, color) },
+                onTemperatureChange = { temp -> viewModel.updateGroupTemperature(groupId, temp) },
+                onSceneSelect = { scene -> viewModel.updateGroupScene(groupId, scene) }
             )
         }
     }

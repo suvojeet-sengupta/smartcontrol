@@ -26,6 +26,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     var bulbs by mutableStateOf<List<WizBulb>>(emptyList())
         private set
 
+    // Groups state
+    var groups by mutableStateOf<List<BulbGroup>>(emptyList())
+        private set
+
     // Discovery state
     var discoveryState by mutableStateOf<DiscoveryState>(DiscoveryState.Idle)
         private set
@@ -38,11 +42,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     init {
         // App khulte hi purane saved bulbs load karo
         loadBulbs()
+        loadGroups()
         startPolling()
     }
 
     private fun loadBulbs() {
         bulbs = repository.getDevices()
+    }
+
+    private fun loadGroups() {
+        groups = repository.getGroups()
     }
 
     private fun startPolling() {
@@ -222,6 +231,75 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             WizUdpController.sendCommand(bulb.ipAddress, params)
+        }
+    }
+
+    // Group Management
+    fun createGroup(name: String, bulbIds: List<String>) {
+        val newGroup = BulbGroup(
+            id = UUID.randomUUID().toString(),
+            name = name,
+            bulbIds = bulbIds
+        )
+        val updatedGroups = groups + newGroup
+        groups = updatedGroups
+        repository.saveGroups(updatedGroups)
+    }
+
+    fun deleteGroup(groupId: String) {
+        val updatedGroups = groups.filter { it.id != groupId }
+        groups = updatedGroups
+        repository.saveGroups(updatedGroups)
+    }
+
+    // Group Control
+    fun toggleGroup(groupId: String) {
+        val group = groups.find { it.id == groupId } ?: return
+        val newState = !group.isOn
+        
+        // Update group state
+        groups = groups.map { if (it.id == groupId) it.copy(isOn = newState) else it }
+        repository.saveGroups(groups)
+
+        // Update all bulbs in group
+        group.bulbIds.forEach { bulbId ->
+            // Update local state
+            bulbs = bulbs.map { if (it.id == bulbId) it.copy(isOn = newState) else it }
+            // Send command
+            syncWithBulb(bulbId)
+        }
+        repository.saveDevices(bulbs)
+    }
+
+    fun updateGroupBrightness(groupId: String, brightness: Float) {
+        val group = groups.find { it.id == groupId } ?: return
+        
+        groups = groups.map { if (it.id == groupId) it.copy(brightness = brightness) else it }
+        repository.saveGroups(groups)
+
+        group.bulbIds.forEach { bulbId ->
+            updateBrightness(bulbId, brightness)
+        }
+    }
+
+    fun updateGroupColor(groupId: String, color: Color) {
+        val group = groups.find { it.id == groupId } ?: return
+        group.bulbIds.forEach { bulbId ->
+            updateColor(bulbId, color)
+        }
+    }
+
+    fun updateGroupTemperature(groupId: String, temp: Int) {
+        val group = groups.find { it.id == groupId } ?: return
+        group.bulbIds.forEach { bulbId ->
+            updateTemperature(bulbId, temp)
+        }
+    }
+
+    fun updateGroupScene(groupId: String, scene: String?) {
+        val group = groups.find { it.id == groupId } ?: return
+        group.bulbIds.forEach { bulbId ->
+            updateScene(bulbId, scene)
         }
     }
 
