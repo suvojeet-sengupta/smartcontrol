@@ -84,7 +84,7 @@ object WizUdpController {
                 
                 // Convert back to map for compatibility with existing code
                 val result = wizResponse.result
-                if (result != null) {
+                return@withContext if (result != null) {
                     mapOf(
                         "mac" to result.mac,
                         "rssi" to result.rssi,
@@ -104,7 +104,7 @@ object WizUdpController {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting status from $ip: ${e.message}")
-                null
+                return@withContext null
             }
         }
     }
